@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HPP, BOM & Manufaktur Manager{% endblock %}</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; }
+            main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans" x-data="{ 
+    mobileSidebarOpen: false,
+    projectTreeOpen: true,
+    inventoryTreeOpen: true,
+    hrTreeOpen: true
+}">
+    <!-- Layout Wrapper -->
+    <div class="min-h-screen flex flex-col md:flex-row">
+        
+        <!-- Mobile Topbar (Visible only on small screens) -->
+        <header class="md:hidden bg-slate-900 text-white flex items-center justify-between px-4 py-3 shadow z-20 no-print sticky top-0">
+            <div class="flex items-center space-x-3">
+                <button @click="mobileSidebarOpen = !mobileSidebarOpen" class="p-1.5 rounded-md hover:bg-slate-800 focus:outline-none text-slate-300 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+                <span class="font-extrabold text-base tracking-tight text-indigo-300">HPP & BOM Manager</span>
+            </div>
+            <a href="{% url 'project_create' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded text-xs font-semibold">
+                + Project
+            </a>
+        </header>
+
+        <!-- Mobile Sidebar Backdrop -->
+        <div x-show="mobileSidebarOpen" 
+             x-transition:enter="transition-opacity ease-linear duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition-opacity ease-linear duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @click="mobileSidebarOpen = false" 
+             class="fixed inset-0 bg-slate-900/60 z-30 md:hidden no-print" 
+             style="display: none;"></div>
+
+        <!-- Sidebar Left (Desktop & Mobile Drawer) -->
+        <aside :class="mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+               class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-200 ease-in-out md:static md:translate-x-0 md:min-h-screen border-r border-slate-800 shadow-lg no-print">
+            
+            <!-- Sidebar Header / Brand -->
+            <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+                <div>
+                    <span class="text-xs uppercase tracking-wider font-bold text-indigo-400 block">Sistem Terpadu</span>
+                    <a href="{% url 'project_list' %}" class="text-lg font-black text-white tracking-tight hover:text-indigo-200">
+                        HPP & Manufaktur
+                    </a>
+                </div>
+                <button @click="mobileSidebarOpen = false" class="md:hidden text-slate-400 hover:text-white p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Sidebar Navigation (Treeview) -->
+            <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto text-xs font-medium">
+                
+                <!-- Quick Action Button -->
+                <div class="pb-3 px-1">
+                    <a href="{% url 'project_create' %}" class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-lg shadow transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <span>Buat Project Baru</span>
+                    </a>
+                </div>
+
+                <!-- TREE 1: MANAJEMEN PROJECT & HPP -->
+                <div>
+                    <button @click="projectTreeOpen = !projectTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+                            <span class="font-bold uppercase tracking-wider text-[11px] text-slate-200">Project & HPP</span>
+                        </div>
+                        <svg :class="projectTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                    <div x-show="projectTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
+                        <a href="{% url 'project_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/' or '/projects/' in request.path and not '/realization' in request.path and not '/new/' in request.path %}text-indigo-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Daftar Project & HPP</span>
+                        </a>
+                        <a href="{% url 'project_realization_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/realization' in request.path %}text-cyan-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Realisasi Project</span>
+                        </a>
+                        <a href="{% url 'customer_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/customers/' in request.path %}text-indigo-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Master Customer</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- TREE 2: BARANG JADI -->
+                <div>
+                    <button @click="inventoryTreeOpen = !inventoryTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                            <span class="font-bold uppercase tracking-wider text-[11px] text-slate-200">Barang Jadi</span>
+                        </div>
+                        <svg :class="inventoryTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                    <div x-show="inventoryTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
+                        <a href="{% url 'finished_good_form_view' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/stock/add/' %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Tambah Barang Jadi</span>
+                        </a>
+                        <a href="{% url 'stock_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/stock/mutations/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Mutasi Barang Jadi</span>
+                        </a>
+                        <a href="{% url 'stock_report' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/stock/' %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Laporan Persediaan</span>
+                        </a>
+                        <a href="{% url 'stock_card_index' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/stock/cards/' in request.path or '/card/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Kartu Stock</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- TREE 3: SDM, ABSENSI & KINERJA -->
+                <div>
+                    <button @click="hrTreeOpen = !hrTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            <span class="font-bold uppercase tracking-wider text-[11px] text-slate-200">SDM & Tenaga Kerja</span>
+                        </div>
+                        <svg :class="hrTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                    <div x-show="hrTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
+                        <a href="{% url 'attendance_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/attendance/' in request.path %}text-amber-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Rekap Absensi Harian</span>
+                        </a>
+                        <a href="{% url 'work_log_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/work-logs/' in request.path %}text-amber-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Log Kinerja & Kegiatan</span>
+                        </a>
+                        <a href="{% url 'employee_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/employees/' in request.path %}text-amber-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Master Data Karyawan</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Django Admin Shortcut -->
+                <div class="pt-4 border-t border-slate-800">
+                    <a href="/admin/" target="_blank" class="flex items-center justify-between px-2 py-1.5 text-slate-400 hover:text-indigo-300 text-xs">
+                        <span>Django Admin Panel</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </a>
+                </div>
+            </nav>
+
+            <!-- User / System Status Footer in Sidebar -->
+            <div class="p-3 border-t border-slate-800 text-[11px] text-slate-400 bg-slate-950/60 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>System Online</span>
+                </span>
+                <span class="font-mono text-[10px] text-slate-500">v1.3</span>
+            </div>
+        </aside>
+
+        <!-- Right Workspace / Form Area -->
+        <div class="flex-1 flex flex-col min-w-0 bg-slate-50 min-h-screen">
+            <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+
+    </div>
+</body>
+</html>

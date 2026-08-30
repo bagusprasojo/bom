@@ -1,0 +1,72 @@
+﻿<!-- hpp/templates/hpp/project_form.html -->
+{% extends "hpp/base.html" %}
+
+{% block title %}Buat Project Baru - HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+    <h1 class="text-xl font-bold text-slate-900 mb-4">Buat Project Baru</h1>
+    
+    <form method="POST" class="space-y-4">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kode Project (Otomatis)</label>
+                <input type="text" name="code" value="{{ auto_code }}" readonly class="w-full rounded-md border border-slate-200 bg-slate-100 font-mono font-bold text-indigo-700 px-3 py-2 text-sm focus:outline-none cursor-not-allowed">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Customer / Klien</label>
+                <select name="customer_uuid" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="">-- Pilih Customer --</option>
+                    {% for c in customers %}
+                    <option value="{{ c.uuid }}">{{ c.name }}{% if c.company_name %} ({{ c.company_name }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+                <div class="text-[11px] text-slate-400 mt-1">
+                    Customer belum ada? <a href="{% url 'customer_list' %}" target="_blank" class="text-indigo-600 font-bold hover:underline">+ Master Customer</a>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Project *</label>
+            <input type="text" name="name" required placeholder="Pembuatan 50 Set Meja Kantor" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nilai Kontrak / Jual (Rp)</label>
+                <input type="number" step="0.01" name="contract_value" value="0" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status Awal</label>
+                <select name="status" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    {% for code, label in status_choices %}
+                    <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Progress (%)</label>
+                <input type="number" min="0" max="100" name="progress_percentage" value="0" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tgl Mulai</label>
+                <input type="date" name="start_date" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Target Selesai</label>
+                <input type="date" name="target_date" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <a href="{% url 'project_list' %}" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-200">Batal</a>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700">Simpan & Lanjut ke BOM</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

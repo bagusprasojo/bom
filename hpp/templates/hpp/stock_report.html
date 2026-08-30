@@ -1,0 +1,169 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Laporan Persediaan Barang Jadi - HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ addFgModal: false, editFgModal: false, currentFg: {} }">
+    <!-- Messages Notification -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-md text-sm font-medium {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <span>Barang Jadi</span>
+                <span>&rsaquo;</span>
+                <span>Laporan Persediaan</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">Laporan Persediaan Barang Jadi</h1>
+            <p class="text-sm text-slate-500">Monitoring stock fisik barang jadi on-hand dan total nilai valuasi persediaan.</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'stock_mutation_list' %}" class="inline-flex items-center px-3.5 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200">
+                Lihat Mutasi Stock
+            </a>
+            <a href="{% url 'finished_good_form_view' %}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 shadow">
+                + Tambah Barang Jadi
+            </a>
+        </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form method="GET" class="flex gap-3">
+            <input type="text" name="q" value="{{ query }}" placeholder="Cari SKU atau nama barang jadi..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+            <button type="submit" class="px-5 py-2 bg-slate-800 text-white text-sm font-medium rounded-md hover:bg-slate-700">Cari</button>
+            <a href="{% url 'stock_report' %}" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-200">Reset</a>
+        </form>
+    </div>
+
+    <!-- KPI Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Varian Barang Jadi</span>
+            <div class="text-2xl font-bold text-slate-800 mt-1">{{ finished_goods.count }} SKU</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Unit Stock Tersedia</span>
+            <div class="text-2xl font-bold text-indigo-700 mt-1">{{ total_units|rupiah }} Unit/Set</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Estimasi Valuasi Stock</span>
+            <div class="text-2xl font-bold text-emerald-700 mt-1">Rp {{ total_valuation|rupiah }}</div>
+        </div>
+    </div>
+
+    <!-- Table Stock -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">SKU / Kode</th>
+                    <th class="px-4 py-3">Nama Barang Jadi</th>
+                    <th class="px-4 py-3 text-right">Standard Cost</th>
+                    <th class="px-4 py-3 text-right">Stock On Hand</th>
+                    <th class="px-4 py-3 text-right">Valuasi Stock</th>
+                    <th class="px-4 py-3 text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for fg in finished_goods %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 font-mono font-bold text-slate-700">#{{ fg.sku }}</td>
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-slate-900">{{ fg.name }}</div>
+                        {% if fg.notes %}<span class="text-xs text-slate-400">{{ fg.notes }}</span>{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right text-slate-600">Rp {{ fg.standard_cost|rupiah }} / {{ fg.unit }}</td>
+                    <td class="px-4 py-3 text-right">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if fg.current_stock > 0 %}bg-emerald-100 text-emerald-800{% else %}bg-rose-100 text-rose-800{% endif %}">
+                            {{ fg.current_stock|rupiah }} {{ fg.unit }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-800">
+                        Rp {{ fg.stock_valuation|rupiah }}
+                    </td>
+                    <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                        <a href="{% url 'stock_card' fg.uuid %}" class="inline-block text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded hover:bg-indigo-100 font-semibold">
+                            Kartu Stock
+                        </a>
+                        <button @click="currentFg = {
+                            uuid: '{{ fg.uuid }}',
+                            sku: '{{ fg.sku|escapejs }}',
+                            name: '{{ fg.name|escapejs }}',
+                            unit: '{{ fg.unit|escapejs }}',
+                            standard_cost: '{{ fg.standard_cost }}',
+                            notes: '{{ fg.notes|escapejs }}'
+                        }; editFgModal = true" class="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-semibold">
+                            Edit
+                        </button>
+                        
+                        {% if not fg.has_transactions %}
+                        <form action="{% url 'finished_good_delete' fg.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus barang jadi {{ fg.name }}?')">
+                            {% csrf_token %}
+                            <button type="submit" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-1">
+                                Hapus
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-xs text-slate-300 cursor-not-allowed px-1" title="Tidak dapat dihapus karena memiliki riwayat mutasi / transaksi">
+                            Hapus
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-slate-400">Belum ada data barang jadi. Klik "+ Tambah Barang Jadi" untuk menambahkan.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MODAL: Edit Master Barang Jadi -->
+    <div x-show="editFgModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editFgModal = false" class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Edit Master Barang Jadi</h3>
+            <form :action="'/stock/' + currentFg.uuid + '/update/'" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">SKU / Kode *</label>
+                        <input type="text" name="sku" x-model="currentFg.sku" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan *</label>
+                        <input type="text" name="unit" x-model="currentFg.unit" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Barang Jadi *</label>
+                    <input type="text" name="name" x-model="currentFg.name" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Cost Standar (Rp)</label>
+                    <input type="number" step="0.01" name="standard_cost" x-model="currentFg.standard_cost" class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
+                    <textarea name="notes" x-model="currentFg.notes" rows="2" class="w-full rounded border border-slate-300 p-2 text-sm"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editFgModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

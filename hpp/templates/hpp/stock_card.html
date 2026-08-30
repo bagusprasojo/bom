@@ -1,0 +1,97 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Kartu Stock - {{ finished_good.name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb & Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'stock_report' %}" class="text-indigo-600 hover:underline">Laporan Persediaan</a>
+                <span>&rsaquo;</span>
+                <span class="font-mono">#{{ finished_good.sku }}</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">Kartu Stock: {{ finished_good.name }}</h1>
+            <p class="text-sm text-slate-500">Satuan: <strong class="text-slate-700">{{ finished_good.unit }}</strong> | Cost Standar: <strong class="text-slate-700">Rp {{ finished_good.standard_cost|rupiah }}</strong></p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="{% url 'stock_mutation_list' %}?fg={{ finished_good.uuid }}" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">
+                + Input Mutasi Barang Ini
+            </a>
+            <a href="{% url 'stock_report' %}" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md">
+                &larr; Kembali ke Laporan
+            </a>
+        </div>
+    </div>
+
+    <!-- Stock KPI -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Stock Saat Ini (On Hand)</span>
+            <div class="text-2xl font-bold {% if finished_good.current_stock > 0 %}text-emerald-700{% else %}text-rose-600{% endif %} mt-1">
+                {{ finished_good.current_stock|rupiah }} {{ finished_good.unit }}
+            </div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Masuk (IN)</span>
+            <div class="text-2xl font-bold text-indigo-700 mt-1">+{{ total_in|rupiah }} {{ finished_good.unit }}</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Keluar / Rilis (OUT)</span>
+            <div class="text-2xl font-bold text-slate-800 mt-1">-{{ total_out|rupiah }} {{ finished_good.unit }}</div>
+        </div>
+    </div>
+
+    <!-- Table Kartu Stock Mutasi -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-100 bg-slate-50 font-bold text-sm text-slate-800">
+            Riwayat Transaksi Keluar & Masuk
+        </div>
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">Tanggal & Waktu</th>
+                    <th class="px-4 py-3">No. Referensi / Project</th>
+                    <th class="px-4 py-3">Keterangan</th>
+                    <th class="px-4 py-3 text-right text-emerald-700">Masuk (IN)</th>
+                    <th class="px-4 py-3 text-right text-rose-700">Keluar (OUT)</th>
+                    <th class="px-4 py-3 text-right">Saldo Akhir</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-mono text-xs sm:text-sm">
+                {% for m in mutations %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 text-slate-500 font-sans">{{ m.created_at|date:"d M Y, H:i" }}</td>
+                    <td class="px-4 py-3 font-semibold text-slate-800 font-sans">
+                        {% if m.project %}
+                        <a href="{% url 'project_detail' m.project.uuid %}" class="text-indigo-600 hover:underline">
+                            {{ m.reference_no }} ({{ m.project.code }}: {{ m.project.name|truncatechars:20 }})
+                        </a>
+                        {% else %}
+                        {{ m.reference_no|default:"-" }}
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 font-sans text-slate-600">{{ m.notes|default:"-" }}</td>
+                    <td class="px-4 py-3 text-right font-bold text-emerald-600">
+                        {% if m.mutation_type == 'IN' %}+{{ m.quantity|rupiah }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-bold text-rose-600">
+                        {% if m.mutation_type == 'OUT' %}-{{ m.quantity|rupiah }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-bold text-slate-900 bg-slate-50/50">
+                        {{ m.balance_after|rupiah }} {{ finished_good.unit }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-slate-400 font-sans">Belum ada transaksi mutasi untuk barang jadi ini.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

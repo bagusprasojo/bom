@@ -1,0 +1,344 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Log Kinerja & Kegiatan Karyawan - HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ addLogModal: false, editLogModal: false, currentLog: {} }">
+    <!-- Messages Notification -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-md text-sm font-medium {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Log Kinerja & Kegiatan Karyawan</h1>
+            <p class="text-sm text-slate-500">Pencatatan aktivitas harian tenaga kerja, output kuantitas pengerjaan, dan catatan kendala lapangan.</p>
+        </div>
+        <div class="flex gap-2">
+            <button @click="addLogModal = true" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 shadow">
+                + Input Kegiatan Harian
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form method="GET" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Tanggal</label>
+                <input type="date" name="date" value="{{ selected_date }}" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Karyawan</label>
+                <select name="employee" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">-- Semua Karyawan --</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.uuid }}" {% if selected_emp == emp.uuid|stringformat:'s' %}selected{% endif %}>{{ emp.name }} ({{ emp.position }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Status Pengerjaan</label>
+                <select name="status" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">-- Semua Status --</option>
+                    {% for code, label in status_choices %}
+                    <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-end gap-2">
+                <button type="submit" class="w-full px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-md hover:bg-slate-700">Filter</button>
+                <a href="{% url 'work_log_list' %}" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-200">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- KPI Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Catatan Kegiatan</span>
+            <div class="text-2xl font-bold text-slate-800 mt-1">{{ total_logs }} Catatan</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Jam Kerja Terlapor</span>
+            <div class="text-2xl font-bold text-indigo-700 mt-1">{{ total_hours|rupiah }} Jam</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Tugas Terselesaikan</span>
+            <div class="text-2xl font-bold text-emerald-700 mt-1">{{ completed_count }} dari {{ total_logs }}</div>
+        </div>
+    </div>
+
+    <!-- Table Work Logs -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">Tanggal & Karyawan</th>
+                    <th class="px-4 py-3">Project & Kategori</th>
+                    <th class="px-4 py-3">Deskripsi Aktivitas</th>
+                    <th class="px-4 py-3 text-right">Output Kerja</th>
+                    <th class="px-4 py-3 text-center">Durasi</th>
+                    <th class="px-4 py-3 text-center">Status & Rating</th>
+                    <th class="px-4 py-3 text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for log in logs %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3">
+                        <div class="font-semibold text-slate-900">{{ log.employee.name }}</div>
+                        <span class="text-xs text-slate-400 font-mono">{{ log.date|date:"d M Y" }} &bull; {{ log.employee.position }}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-slate-800">{{ log.activity_category }}</div>
+                        {% if log.project %}
+                        <a href="{% url 'project_detail' log.project.uuid %}" class="text-xs text-indigo-600 hover:underline">
+                            #{{ log.project.code }}: {{ log.project.name|truncatechars:25 }}
+                        </a>
+                        {% else %}
+                        <span class="text-xs text-slate-400">Umum / Workshop</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 max-w-xs">
+                        <div class="text-xs text-slate-800 line-clamp-2">{{ log.task_description }}</div>
+                        {% if log.obstacles %}
+                        <div class="text-[11px] text-amber-700 mt-1 bg-amber-50 px-1.5 py-0.5 rounded">
+                            <strong>Kendala:</strong> {{ log.obstacles }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-medium text-slate-800">
+                        {% if log.output_qty > 0 %}
+                        {{ log.output_qty|rupiah }} {{ log.output_unit }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-center font-mono text-xs text-slate-600">
+                        {{ log.hours_spent|rupiah }} Jam
+                    </td>
+                    <td class="px-4 py-3 text-center space-y-1">
+                        <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold
+                            {% if log.status == 'completed' %}bg-emerald-100 text-emerald-800
+                            {% elif log.status == 'in_progress' %}bg-blue-100 text-blue-800
+                            {% else %}bg-amber-100 text-amber-800{% endif %}">
+                            {{ log.get_status_display }}
+                        </span>
+                        <div class="text-[11px] text-amber-500 font-bold">
+                            ? {{ log.supervisor_rating }}/5
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                        <button @click="currentLog = {
+                            uuid: '{{ log.uuid }}',
+                            emp_name: '{{ log.employee.name|escapejs }}',
+                            project_uuid: '{{ log.project.uuid|default:'' }}',
+                            date: '{{ log.date|date:'Y-m-d' }}',
+                            activity_category: '{{ log.activity_category|escapejs }}',
+                            task_description: '{{ log.task_description|escapejs }}',
+                            output_qty: '{{ log.output_qty }}',
+                            output_unit: '{{ log.output_unit|escapejs }}',
+                            hours_spent: '{{ log.hours_spent }}',
+                            status: '{{ log.status }}',
+                            obstacles: '{{ log.obstacles|escapejs }}',
+                            supervisor_rating: '{{ log.supervisor_rating }}'
+                        }; editLogModal = true" class="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-semibold">
+                            Edit
+                        </button>
+                        <form action="{% url 'work_log_delete' log.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus log aktivitas ini?')">
+                            {% csrf_token %}
+                            <button type="submit" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-1">
+                                Hapus
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="px-4 py-8 text-center text-slate-400">Belum ada log kegiatan kerja yang tercatat.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MODAL: Input Kegiatan Harian -->
+    <div x-show="addLogModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="addLogModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Input Kegiatan & Kinerja Harian</h3>
+            <form action="{% url 'work_log_create' %}" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Pilih Karyawan *</label>
+                        <select name="employee_uuid" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                            <option value="">-- Pilih Karyawan --</option>
+                            {% for emp in employees %}
+                            <option value="{{ emp.uuid }}">{{ emp.name }} ({{ emp.position }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tanggal *</label>
+                        <input type="date" name="date" required value="{{ selected_date|default:'' }}" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Project Terkait</label>
+                        <select name="project_uuid" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            <option value="">-- Non-Project / Workshop --</option>
+                            {% for proj in projects %}
+                            <option value="{{ proj.uuid }}">[{{ proj.code }}] {{ proj.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kategori Aktivitas *</label>
+                        <input type="text" name="activity_category" value="Fabrikasi & Produksi" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Deskripsi Pekerjaan *</label>
+                    <textarea name="task_description" required rows="2" placeholder="Uraikan pekerjaan yang dilakukan hari ini..." class="w-full rounded border border-slate-300 p-2 text-sm"></textarea>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Output (Qty)</label>
+                        <input type="number" step="0.01" name="output_qty" value="1" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan Output</label>
+                        <input type="text" name="output_unit" value="unit" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Durasi (Jam)</label>
+                        <input type="number" step="0.5" name="hours_spent" value="8" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status Pekerjaan</label>
+                        <select name="status" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            {% for code, label in status_choices %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Rating Kinerja Mandor</label>
+                        <select name="supervisor_rating" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            {% for val, label in rating_choices %}
+                            <option value="{{ val }}" {% if val == 4 %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kendala / Hambatan Lapangan</label>
+                    <input type="text" name="obstacles" placeholder="Contoh: mesin las error 1 jam / material telat kirim..." class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="addLogModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan Kegiatan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Kegiatan Harian -->
+    <div x-show="editLogModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editLogModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Edit Log Kegiatan</h3>
+            <p class="text-xs text-slate-500">Karyawan: <strong x-text="currentLog.emp_name" class="text-slate-800"></strong></p>
+            <form :action="'/work-logs/' + currentLog.uuid + '/update/'" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tanggal *</label>
+                        <input type="date" name="date" x-model="currentLog.date" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Project Terkait</label>
+                        <select name="project_uuid" x-model="currentLog.project_uuid" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            <option value="">-- Non-Project / Workshop --</option>
+                            {% for proj in projects %}
+                            <option value="{{ proj.uuid }}">[{{ proj.code }}] {{ proj.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kategori Aktivitas *</label>
+                    <input type="text" name="activity_category" x-model="currentLog.activity_category" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Deskripsi Pekerjaan *</label>
+                    <textarea name="task_description" x-model="currentLog.task_description" required rows="2" class="w-full rounded border border-slate-300 p-2 text-sm"></textarea>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Output (Qty)</label>
+                        <input type="number" step="0.01" name="output_qty" x-model="currentLog.output_qty" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan Output</label>
+                        <input type="text" name="output_unit" x-model="currentLog.output_unit" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Durasi (Jam)</label>
+                        <input type="number" step="0.5" name="hours_spent" x-model="currentLog.hours_spent" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status Pekerjaan</label>
+                        <select name="status" x-model="currentLog.status" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            {% for code, label in status_choices %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Rating Mandor</label>
+                        <select name="supervisor_rating" x-model="currentLog.supervisor_rating" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            {% for val, label in rating_choices %}
+                            <option value="{{ val }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kendala Lapangan</label>
+                    <input type="text" name="obstacles" x-model="currentLog.obstacles" class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editLogModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update Kegiatan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

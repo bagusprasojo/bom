@@ -1,0 +1,187 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Master Data Karyawan - HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ addEmpModal: false, editEmpModal: false, currentEmp: {} }">
+    <!-- Messages Notification -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-md text-sm font-medium {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'attendance_list' %}" class="text-indigo-600 hover:underline">Absensi Karyawan</a>
+                <span>&rsaquo;</span>
+                <span>Master Karyawan</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">Master Data Karyawan</h1>
+            <p class="text-sm text-slate-500">Kelola data tenaga kerja, tarif upah harian, dan tarif lembur.</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'attendance_list' %}" class="inline-flex items-center px-3 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200">
+                &larr; Rekap Absensi
+            </a>
+            <button @click="addEmpModal = true" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 shadow">
+                + Tambah Karyawan
+            </button>
+        </div>
+    </div>
+
+    <!-- Table Employees -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">NIK</th>
+                    <th class="px-4 py-3">Nama Karyawan</th>
+                    <th class="px-4 py-3">Posisi / Jabatan</th>
+                    <th class="px-4 py-3 text-right">Tarif Harian</th>
+                    <th class="px-4 py-3 text-right">Tarif Lembur / Jam</th>
+                    <th class="px-4 py-3 text-center">Status</th>
+                    <th class="px-4 py-3 text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for emp in employees %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 font-mono font-bold text-slate-700">#{{ emp.nik }}</td>
+                    <td class="px-4 py-3 font-semibold text-slate-900">{{ emp.name }}</td>
+                    <td class="px-4 py-3 text-slate-600">{{ emp.position }}</td>
+                    <td class="px-4 py-3 text-right font-medium text-slate-800">Rp {{ emp.daily_rate|rupiah }}</td>
+                    <td class="px-4 py-3 text-right text-indigo-700 font-medium">Rp {{ emp.overtime_rate_per_hour|rupiah }}</td>
+                    <td class="px-4 py-3 text-center">
+                        {% if emp.is_active %}
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Aktif</span>
+                        {% else %}
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500">Non-Aktif</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                        <button @click="currentEmp = {
+                            uuid: '{{ emp.uuid }}',
+                            nik: '{{ emp.nik|escapejs }}',
+                            name: '{{ emp.name|escapejs }}',
+                            position: '{{ emp.position|escapejs }}',
+                            daily_rate: '{{ emp.daily_rate }}',
+                            overtime_rate_per_hour: '{{ emp.overtime_rate_per_hour }}',
+                            is_active: {% if emp.is_active %}true{% else %}false{% endif %},
+                            notes: '{{ emp.notes|escapejs }}'
+                        }; editEmpModal = true" class="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded hover:bg-slate-200 font-semibold">
+                            Edit
+                        </button>
+                        <form action="{% url 'employee_delete' emp.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus karyawan {{ emp.name }}?')">
+                            {% csrf_token %}
+                            <button type="submit" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-1">
+                                Hapus
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="px-4 py-8 text-center text-slate-400">Belum ada data karyawan.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MODAL: Tambah Karyawan -->
+    <div x-show="addEmpModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="addEmpModal = false" class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Tambah Karyawan Baru</h3>
+            <form action="{% url 'employee_create' %}" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">NIK / ID Karyawan *</label>
+                        <input type="text" name="nik" required placeholder="EMP-001" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Posisi / Pekerjaan *</label>
+                        <input type="text" name="position" required placeholder="Tukang Las / Kayu" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Lengkap *</label>
+                    <input type="text" name="name" required placeholder="Nama Karyawan" class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tarif Harian (Rp)</label>
+                        <input type="number" step="0.01" name="daily_rate" value="150000" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tarif Lembur/Jam (Rp)</label>
+                        <input type="number" step="0.01" name="overtime_rate_per_hour" value="25000" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
+                    <input type="text" name="notes" placeholder="Catatan keahlian/kontak..." class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="addEmpModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan Karyawan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Karyawan -->
+    <div x-show="editEmpModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editEmpModal = false" class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Edit Data Karyawan</h3>
+            <form :action="'/employees/' + currentEmp.uuid + '/update/'" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">NIK *</label>
+                        <input type="text" name="nik" x-model="currentEmp.nik" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Posisi *</label>
+                        <input type="text" name="position" x-model="currentEmp.position" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Lengkap *</label>
+                    <input type="text" name="name" x-model="currentEmp.name" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tarif Harian (Rp)</label>
+                        <input type="number" step="0.01" name="daily_rate" x-model="currentEmp.daily_rate" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tarif Lembur/Jam (Rp)</label>
+                        <input type="number" step="0.01" name="overtime_rate_per_hour" x-model="currentEmp.overtime_rate_per_hour" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="is_active" name="is_active" x-model="currentEmp.is_active" class="rounded text-indigo-600">
+                    <label for="is_active" class="text-xs font-semibold text-slate-700">Status Karyawan Aktif</label>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
+                    <input type="text" name="notes" x-model="currentEmp.notes" class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editEmpModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update Karyawan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,266 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Rekap Absensi Karyawan - HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ addAttModal: false, editAttModal: false, currentAtt: {} }">
+    <!-- Messages Notification -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-md text-sm font-medium {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Rekap Absensi Karyawan</h1>
+            <p class="text-sm text-slate-500">Pencatatan kehadiran, jam masuk/pulang, lembur, dan status izin/sakit harian.</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'employee_list' %}" class="inline-flex items-center px-3 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200">
+                Kelola Karyawan ({{ employees.count }})
+            </a>
+            <button @click="addAttModal = true" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 shadow">
+                + Input Absensi Harian
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form method="GET" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Tanggal Absensi</label>
+                <input type="date" name="date" value="{{ selected_date }}" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Status Kehadiran</label>
+                <select name="status" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">-- Semua Status --</option>
+                    {% for code, label in status_choices %}
+                    <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Cari Karyawan</label>
+                <input type="text" name="q" value="{{ query }}" placeholder="Nama atau NIK..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div class="flex items-end gap-2">
+                <button type="submit" class="w-full px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-md hover:bg-slate-700">Filter</button>
+                <a href="{% url 'attendance_list' %}" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-200">Hari Ini</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- KPI Summary Day -->
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center">
+            <span class="text-[11px] font-bold text-slate-400 uppercase">Hadir</span>
+            <div class="text-xl font-bold text-emerald-600 mt-0.5">{{ total_hadir }}</div>
+        </div>
+        <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center">
+            <span class="text-[11px] font-bold text-slate-400 uppercase">Izin</span>
+            <div class="text-xl font-bold text-blue-600 mt-0.5">{{ total_ijin }}</div>
+        </div>
+        <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center">
+            <span class="text-[11px] font-bold text-slate-400 uppercase">Sakit</span>
+            <div class="text-xl font-bold text-amber-600 mt-0.5">{{ total_sakit }}</div>
+        </div>
+        <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center">
+            <span class="text-[11px] font-bold text-slate-400 uppercase">Alpha</span>
+            <div class="text-xl font-bold text-rose-600 mt-0.5">{{ total_alpha }}</div>
+        </div>
+        <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center">
+            <span class="text-[11px] font-bold text-slate-400 uppercase">Total Lembur</span>
+            <div class="text-xl font-bold text-indigo-700 mt-0.5">{{ total_ot_hours|rupiah }} Jam</div>
+        </div>
+        <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center">
+            <span class="text-[11px] font-bold text-slate-400 uppercase">Total Upah Hari Ini</span>
+            <div class="text-sm font-bold text-slate-800 mt-1">Rp {{ total_wage_day|rupiah }}</div>
+        </div>
+    </div>
+
+    <!-- Table Attendance -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">Karyawan & Posisi</th>
+                    <th class="px-4 py-3 text-center">Status</th>
+                    <th class="px-4 py-3 text-center">Jam Masuk</th>
+                    <th class="px-4 py-3 text-center">Jam Pulang</th>
+                    <th class="px-4 py-3 text-center">Lembur (Jam)</th>
+                    <th class="px-4 py-3 text-right">Total Upah</th>
+                    <th class="px-4 py-3">Keterangan</th>
+                    <th class="px-4 py-3 text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for att in attendances %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3">
+                        <div class="font-semibold text-slate-900">{{ att.employee.name }}</div>
+                        <span class="text-xs text-slate-400 font-mono">#{{ att.employee.nik }} &bull; {{ att.employee.position }}</span>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold
+                            {% if att.status == 'HADIR' %}bg-emerald-100 text-emerald-800
+                            {% elif att.status == 'IJIN' %}bg-blue-100 text-blue-800
+                            {% elif att.status == 'SAKIT' %}bg-amber-100 text-amber-800
+                            {% else %}bg-rose-100 text-rose-800{% endif %}">
+                            {{ att.get_status_display }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center font-mono text-xs text-slate-600">
+                        {{ att.check_in|time:"H:i"|default:"-" }}
+                    </td>
+                    <td class="px-4 py-3 text-center font-mono text-xs text-slate-600">
+                        {{ att.check_out|time:"H:i"|default:"-" }}
+                    </td>
+                    <td class="px-4 py-3 text-center font-mono font-semibold {% if att.overtime_hours > 0 %}text-indigo-600{% else %}text-slate-400{% endif %}">
+                        {% if att.overtime_hours > 0 %}{{ att.overtime_hours|rupiah }} Jam{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-800">
+                        Rp {{ att.wage|rupiah }}
+                    </td>
+                    <td class="px-4 py-3 text-xs text-slate-500 max-w-xs truncate">
+                        {{ att.notes|default:"-" }}
+                    </td>
+                    <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                        <button @click="currentAtt = {
+                            uuid: '{{ att.uuid }}',
+                            name: '{{ att.employee.name|escapejs }}',
+                            date: '{{ att.date|date:'Y-m-d' }}',
+                            status: '{{ att.status }}',
+                            check_in: '{{ att.check_in|time:'H:i'|default:'' }}',
+                            check_out: '{{ att.check_out|time:'H:i'|default:'' }}',
+                            overtime_hours: '{{ att.overtime_hours }}',
+                            notes: '{{ att.notes|escapejs }}'
+                        }; editAttModal = true" class="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-semibold">
+                            Edit
+                        </button>
+                        <form action="{% url 'attendance_delete' att.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus absensi {{ att.employee.name }}?')">
+                            {% csrf_token %}
+                            <button type="submit" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-1">
+                                Hapus
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                        Belum ada absensi yang tercatat untuk tanggal <strong>{{ selected_date }}</strong>.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MODAL: Input Absensi Harian -->
+    <div x-show="addAttModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="addAttModal = false" class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Input Absensi Harian</h3>
+            <form action="{% url 'attendance_create' %}" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tanggal *</label>
+                    <input type="date" name="date" required value="{{ selected_date }}" class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Pilih Karyawan *</label>
+                    <select name="employee_uuid" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <option value="">-- Pilih Karyawan --</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.uuid }}">[{{ emp.nik }}] {{ emp.name }} - {{ emp.position }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status Kehadiran *</label>
+                        <select name="status" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            {% for code, label in status_choices %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Lembur (Jam)</label>
+                        <input type="number" step="0.5" name="overtime_hours" value="0" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Jam Masuk</label>
+                        <input type="time" name="check_in" value="08:00" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Jam Pulang</label>
+                        <input type="time" name="check_out" value="17:00" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Keterangan / Catatan</label>
+                    <input type="text" name="notes" placeholder="Keterangan lembur / izin / surat dokter..." class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="addAttModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan Absensi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Absensi -->
+    <div x-show="editAttModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editAttModal = false" class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Edit Absensi</h3>
+            <p class="text-xs text-slate-500">Karyawan: <strong x-text="currentAtt.name" class="text-slate-800"></strong> (<span x-text="currentAtt.date"></span>)</p>
+            <form :action="'/attendance/' + currentAtt.uuid + '/update/'" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status Kehadiran *</label>
+                        <select name="status" x-model="currentAtt.status" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            {% for code, label in status_choices %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Lembur (Jam)</label>
+                        <input type="number" step="0.5" name="overtime_hours" x-model="currentAtt.overtime_hours" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Jam Masuk</label>
+                        <input type="time" name="check_in" x-model="currentAtt.check_in" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Jam Pulang</label>
+                        <input type="time" name="check_out" x-model="currentAtt.check_out" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Keterangan / Catatan</label>
+                    <input type="text" name="notes" x-model="currentAtt.notes" class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editAttModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update Absensi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

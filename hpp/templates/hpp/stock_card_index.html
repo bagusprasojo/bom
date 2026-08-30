@@ -1,0 +1,113 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Kartu Stock Barang Jadi - HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'stock_report' %}" class="text-indigo-600 hover:underline">Barang Jadi</a>
+                <span>&rsaquo;</span>
+                <span>Kartu Stock</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">Kartu Stock Barang Jadi</h1>
+            <p class="text-sm text-slate-500">Histori buku besar mutasi masuk dan keluar per barang jadi beserta saldo akhir.</p>
+        </div>
+
+        <!-- Selector dropdown for choosing finished good -->
+        <form method="GET" class="flex items-center gap-2">
+            <select name="fg" onchange="this.form.submit()" class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50">
+                {% for fg in finished_goods %}
+                <option value="{{ fg.uuid }}" {% if selected_fg.uuid == fg.uuid %}selected{% endif %}>
+                    [{{ fg.sku }}] {{ fg.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    {% if selected_fg %}
+    <!-- Summary for current FG -->
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Cost Standar</span>
+            <div class="text-lg font-bold text-slate-800 mt-1">Rp {{ selected_fg.standard_cost|rupiah }}</div>
+            <div class="text-xs text-slate-400 mt-1">Satuan: {{ selected_fg.unit }}</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Masuk (IN)</span>
+            <div class="text-xl font-bold text-emerald-600 mt-1">+{{ total_in|rupiah }} {{ selected_fg.unit }}</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Total Keluar (OUT)</span>
+            <div class="text-xl font-bold text-rose-600 mt-1">-{{ total_out|rupiah }} {{ selected_fg.unit }}</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm bg-indigo-50/40">
+            <span class="text-xs font-bold text-indigo-700 uppercase">Saldo Stock Saat Ini</span>
+            <div class="text-2xl font-bold {% if selected_fg.current_stock > 0 %}text-indigo-900{% else %}text-rose-600{% endif %} mt-1">
+                {{ selected_fg.current_stock|rupiah }} {{ selected_fg.unit }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Mutation Table for selected FG -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-100 bg-slate-50 font-bold text-sm text-slate-800 flex justify-between items-center">
+            <span>Buku Besar Mutasi: [{{ selected_fg.sku }}] {{ selected_fg.name }}</span>
+            <a href="{% url 'stock_mutation_list' %}?fg={{ selected_fg.uuid }}" class="text-xs text-indigo-600 hover:underline font-semibold">
+                + Input Mutasi Barang Ini
+            </a>
+        </div>
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">Tanggal & Waktu</th>
+                    <th class="px-4 py-3">No. Referensi / Project</th>
+                    <th class="px-4 py-3">Keterangan</th>
+                    <th class="px-4 py-3 text-right text-emerald-700">Masuk (IN)</th>
+                    <th class="px-4 py-3 text-right text-rose-700">Keluar (OUT)</th>
+                    <th class="px-4 py-3 text-right">Saldo Akhir</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-mono text-xs sm:text-sm">
+                {% for m in mutations %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 text-slate-500 font-sans">{{ m.created_at|date:"d M Y, H:i" }}</td>
+                    <td class="px-4 py-3 font-semibold text-slate-800 font-sans">
+                        {% if m.project %}
+                        <a href="{% url 'project_detail' m.project.uuid %}" class="text-indigo-600 hover:underline">
+                            {{ m.reference_no }} ({{ m.project.code }}: {{ m.project.name|truncatechars:20 }})
+                        </a>
+                        {% else %}
+                        {{ m.reference_no|default:"-" }}
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 font-sans text-slate-600">{{ m.notes|default:"-" }}</td>
+                    <td class="px-4 py-3 text-right font-bold text-emerald-600">
+                        {% if m.mutation_type == 'IN' %}+{{ m.quantity|rupiah }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-bold text-rose-600">
+                        {% if m.mutation_type == 'OUT' %}-{{ m.quantity|rupiah }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-bold text-slate-900 bg-slate-50/50">
+                        {{ m.balance_after|rupiah }} {{ selected_fg.unit }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-slate-400 font-sans">Belum ada transaksi mutasi untuk barang jadi ini.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="bg-white p-12 text-center text-slate-400 rounded-xl border border-slate-200">
+        Belum ada data barang jadi. Silakan buat master barang jadi terlebih dahulu.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,692 @@
+﻿{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Realisasi: {{ project.name }} - HPP & Manufaktur{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ 
+    tab: 'material',
+    materialModalOpen: false,
+    laborModalOpen: false,
+    fgModalOpen: false,
+    overheadModalOpen: false,
+    
+    // State form material
+    selectedBomItem: '',
+    materialDate: '{% now "Y-m-d" %}',
+    materialName: '',
+    materialUnit: 'pcs',
+    materialQty: 1,
+    materialCost: 0,
+    isMaterialSubstitute: false,
+
+    // State form labor
+    selectedLaborItem: '',
+    laborDate: '{% now "Y-m-d" %}',
+    laborRoleName: '',
+    laborUnit: 'jam',
+    laborQty: 8,
+    laborRate: 0,
+    isLaborAdditional: false,
+
+    // State form FG
+    selectedProjectFg: '',
+    selectedFgMaster: '',
+    fgDate: '{% now "Y-m-d" %}',
+    fgQty: 1,
+    fgUnitCost: 0,
+
+    // State form overhead
+    selectedOverheadItem: '',
+    overheadDate: '{% now "Y-m-d" %}',
+    overheadName: '',
+    overheadCost: 0,
+    isOverheadAdditional: false
+}">
+
+    <!-- Breadcrumb & Title -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'project_list' %}" class="hover:text-indigo-600">Project & HPP</a>
+                <span>&rsaquo;</span>
+                <a href="{% url 'project_realization_list' %}" class="hover:text-indigo-600">Realisasi</a>
+                <span>&rsaquo;</span>
+                <span class="text-slate-600 font-semibold">{{ project.code }}</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-black text-slate-900">{{ project.name }}</h1>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold
+                    {% if project.status == 'completed' %}bg-emerald-100 text-emerald-800
+                    {% elif project.status == 'in_progress' %}bg-blue-100 text-blue-800
+                    {% elif project.status == 'cancelled' %}bg-red-100 text-red-800
+                    {% else %}bg-slate-100 text-slate-800{% endif %}">
+                    {{ project.get_status_display }}
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">Customer: <strong class="text-slate-700">{{ project.customer_name|default:"-" }}</strong> | Kode: <span class="font-mono text-indigo-600 font-bold">#{{ project.code }}</span></p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="{% url 'project_detail' project.uuid %}" class="px-3.5 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                <span>Lihat Estimasi HPP / BOM</span>
+            </a>
+            <a href="{% url 'export_project_excel' project.uuid %}" class="px-3.5 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Export Excel</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Message jika ada -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-lg text-xs font-semibold {% if message.tags == 'error' %}bg-rose-100 text-rose-800 border border-rose-200{% else %}bg-emerald-100 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- KPI Komparasi Estimasi vs Realisasi -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Nilai Kontrak</span>
+            <span class="text-xl font-black text-slate-900 font-mono mt-1 block">{{ project.contract_value|rupiah }}</span>
+            <span class="text-[10px] text-slate-400 mt-1 block">Harga Jual ke Klien</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-500 block">Estimasi HPP</span>
+            <span class="text-xl font-black text-indigo-700 font-mono mt-1 block">{{ project.total_hpp_estimated|rupiah }}</span>
+            <span class="text-[10px] text-slate-500 mt-1 block">Est. Margin: <strong class="{% if project.est_gross_profit < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">{{ project.est_margin_pct|rupiah }}%</strong></span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-cyan-200 bg-cyan-50/20 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-cyan-600 block">Total Realisasi HPP</span>
+            <span class="text-xl font-black text-cyan-800 font-mono mt-1 block">{{ project.total_hpp_actual|rupiah }}</span>
+            <span class="text-[10px] text-slate-500 mt-1 block">
+                {% if project.total_hpp_actual > project.total_hpp_estimated %}
+                <span class="text-rose-600 font-semibold">&uarr; Over-budget</span>
+                {% else %}
+                <span class="text-emerald-600 font-semibold">&bull; Terakumulasi bertahap</span>
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Realisasi Gross Profit</span>
+            <span class="text-xl font-black font-mono mt-1 block {% if project.act_gross_profit < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                {{ project.act_gross_profit|rupiah }}
+            </span>
+            <span class="text-[10px] font-bold mt-1 block {% if project.act_gross_profit < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                Margin Riil: {{ project.act_margin_pct|rupiah }}%
+            </span>
+        </div>
+    </div>
+    <!-- Navigation Tabs -->
+    <div class="border-b border-slate-200 flex items-center justify-between">
+        <nav class="flex space-x-2 text-xs font-bold">
+            <button @click="tab = 'material'" :class="tab === 'material' ? 'border-cyan-600 text-cyan-700 border-b-2 bg-cyan-50/50' : 'text-slate-500 hover:text-slate-700'" class="px-4 py-3 rounded-t-lg transition flex items-center gap-2">
+                <span>Material / BOM</span>
+                <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px]">{{ bom_realizations.count }}</span>
+            </button>
+            <button @click="tab = 'labor'" :class="tab === 'labor' ? 'border-cyan-600 text-cyan-700 border-b-2 bg-cyan-50/50' : 'text-slate-500 hover:text-slate-700'" class="px-4 py-3 rounded-t-lg transition flex items-center gap-2">
+                <span>Tenaga Kerja</span>
+                <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px]">{{ labor_realizations.count }}</span>
+            </button>
+            <button @click="tab = 'fg'" :class="tab === 'fg' ? 'border-cyan-600 text-cyan-700 border-b-2 bg-cyan-50/50' : 'text-slate-500 hover:text-slate-700'" class="px-4 py-3 rounded-t-lg transition flex items-center gap-2">
+                <span>Barang Jadi (Auto-Stock)</span>
+                <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px]">{{ fg_realizations.count }}</span>
+            </button>
+            <button @click="tab = 'overhead'" :class="tab === 'overhead' ? 'border-cyan-600 text-cyan-700 border-b-2 bg-cyan-50/50' : 'text-slate-500 hover:text-slate-700'" class="px-4 py-3 rounded-t-lg transition flex items-center gap-2">
+                <span>Biaya Overhead</span>
+                <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px]">{{ overhead_realizations.count }}</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- TAB 1: REALISASI MATERIAL / BOM -->
+    <div x-show="tab === 'material'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Realisasi Pengeluaran Material</h2>
+            <button @click="materialModalOpen = true" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>+ Catat Realisasi Material</span>
+            </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-2.5">Tanggal</th>
+                        <th class="px-4 py-2.5">Item BOM Terencana / Pengganti</th>
+                        <th class="px-4 py-2.5 text-center">Status</th>
+                        <th class="px-4 py-2.5 text-right">Qty</th>
+                        <th class="px-4 py-2.5 text-right">Harga Satuan Riil</th>
+                        <th class="px-4 py-2.5 text-right">Total Biaya Riil</th>
+                        <th class="px-4 py-2.5">Catatan</th>
+                        <th class="px-4 py-2.5 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for r in bom_realizations %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-2.5 font-mono text-slate-700 whitespace-nowrap">{{ r.date|date:"Y-m-d" }}</td>
+                        <td class="px-4 py-2.5">
+                            <span class="font-bold text-slate-900">{{ r.item_name }}</span>
+                            {% if r.bom_item %}
+                            <span class="block text-[10px] text-slate-400">Ref BOM: {{ r.bom_item.name }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-center">
+                            {% if r.is_substitute %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Pengganti (Substitusi)</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">Sesuai BOM</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-right font-mono font-semibold text-slate-800">{{ r.qty|rupiah }} {{ r.unit }}</td>
+                        <td class="px-4 py-2.5 text-right font-mono text-slate-700">{{ r.unit_cost|rupiah }}</td>
+                        <td class="px-4 py-2.5 text-right font-mono font-bold text-cyan-800">{{ r.total_cost|rupiah }}</td>
+                        <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
+                        <td class="px-4 py-2.5 text-center whitespace-nowrap">
+                            <a href="{% url 'realization_bom_delete' r.uuid %}" onclick="return confirm('Hapus log realisasi material ini?');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Hapus</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-4 py-6 text-center text-slate-400">Belum ada catatan realisasi material.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if bom_realizations %}
+                <tfoot class="bg-slate-50 font-bold border-t border-slate-200">
+                    <tr>
+                        <td colspan="5" class="px-4 py-2.5 text-right text-slate-700 uppercase tracking-wider text-[11px]">Total Realisasi Material:</td>
+                        <td class="px-4 py-2.5 text-right font-mono text-cyan-800 text-sm">{{ project.total_act_material|rupiah }}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+    <!-- TAB 2: REALISASI TENAGA KERJA -->
+    <div x-show="tab === 'labor'" class="space-y-4" style="display: none;">
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Realisasi Biaya Tenaga Kerja</h2>
+            <button @click="laborModalOpen = true" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>+ Catat Realisasi Tenaga Kerja</span>
+            </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-2.5">Tanggal</th>
+                        <th class="px-4 py-2.5">Peran / Tenaga Kerja</th>
+                        <th class="px-4 py-2.5 text-center">Tipe</th>
+                        <th class="px-4 py-2.5 text-right">Durasi / Volume</th>
+                        <th class="px-4 py-2.5 text-right">Tarif Riil</th>
+                        <th class="px-4 py-2.5 text-right">Total Upah Riil</th>
+                        <th class="px-4 py-2.5">Catatan</th>
+                        <th class="px-4 py-2.5 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for r in labor_realizations %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-2.5 font-mono text-slate-700 whitespace-nowrap">{{ r.date|date:"Y-m-d" }}</td>
+                        <td class="px-4 py-2.5">
+                            <span class="font-bold text-slate-900">{{ r.role_name }}</span>
+                            {% if r.project_labor %}
+                            <span class="block text-[10px] text-slate-400">Ref Rencana: {{ r.project_labor.role_name }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-center">
+                            {% if r.is_additional %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Tenaga Tambahan</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">Terencana</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-right font-mono font-semibold text-slate-800">{{ r.quantity|rupiah }} {{ r.unit }}</td>
+                        <td class="px-4 py-2.5 text-right font-mono text-slate-700">{{ r.rate|rupiah }}</td>
+                        <td class="px-4 py-2.5 text-right font-mono font-bold text-cyan-800">{{ r.total_cost|rupiah }}</td>
+                        <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
+                        <td class="px-4 py-2.5 text-center whitespace-nowrap">
+                            <a href="{% url 'realization_labor_delete' r.uuid %}" onclick="return confirm('Hapus log realisasi tenaga kerja ini?');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Hapus</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-4 py-6 text-center text-slate-400">Belum ada catatan realisasi tenaga kerja.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if labor_realizations %}
+                <tfoot class="bg-slate-50 font-bold border-t border-slate-200">
+                    <tr>
+                        <td colspan="5" class="px-4 py-2.5 text-right text-slate-700 uppercase tracking-wider text-[11px]">Total Realisasi Tenaga Kerja:</td>
+                        <td class="px-4 py-2.5 text-right font-mono text-cyan-800 text-sm">{{ project.total_act_labor|rupiah }}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+    <!-- TAB 3: REALISASI BARANG JADI (AUTO STOCK OUT) -->
+    <div x-show="tab === 'fg'" class="space-y-4" style="display: none;">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Pemakaian Barang Jadi (Auto-Stock OUT)</h2>
+                <p class="text-xs text-slate-500">Setiap log yang disimpan di bawah otomatis memotong stok on-hand dan tercatat di kartu stock.</p>
+            </div>
+            <button @click="fgModalOpen = true" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>+ Catat Pemakaian Barang Jadi</span>
+            </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-2.5">Tanggal</th>
+                        <th class="px-4 py-2.5">SKU & Nama Barang Jadi</th>
+                        <th class="px-4 py-2.5 text-right">Jumlah Pemakaian</th>
+                        <th class="px-4 py-2.5 text-right">HPP Satuan</th>
+                        <th class="px-4 py-2.5 text-right">Total Biaya Riil</th>
+                        <th class="px-4 py-2.5 text-center">Status Mutasi</th>
+                        <th class="px-4 py-2.5">Catatan</th>
+                        <th class="px-4 py-2.5 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for r in fg_realizations %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-2.5 font-mono text-slate-700 whitespace-nowrap">{{ r.date|date:"Y-m-d" }}</td>
+                        <td class="px-4 py-2.5">
+                            <a href="{% url 'stock_card' r.finished_good.uuid %}" class="font-bold text-indigo-600 hover:underline">
+                                {{ r.finished_good.name }}
+                            </a>
+                            <span class="block text-[10px] font-mono text-slate-400">SKU: {{ r.finished_good.sku }}</span>
+                        </td>
+                        <td class="px-4 py-2.5 text-right font-mono font-bold text-slate-800">{{ r.quantity|rupiah }} {{ r.finished_good.unit }}</td>
+                        <td class="px-4 py-2.5 text-right font-mono text-slate-700">{{ r.unit_cost|rupiah }}</td>
+                        <td class="px-4 py-2.5 text-right font-mono font-bold text-cyan-800">{{ r.total_cost|rupiah }}</td>
+                        <td class="px-4 py-2.5 text-center">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-50 text-rose-700 font-bold border border-rose-100">
+                                OUT (Potong Stok)
+                            </span>
+                        </td>
+                        <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
+                        <td class="px-4 py-2.5 text-center whitespace-nowrap">
+                            <a href="{% url 'realization_fg_delete' r.uuid %}" onclick="return confirm('Batalkan log ini? Stok akan dikembalikan (Rollback IN).');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Batal / Kembalikan Stok</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-4 py-6 text-center text-slate-400">Belum ada catatan pemakaian barang jadi.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if fg_realizations %}
+                <tfoot class="bg-slate-50 font-bold border-t border-slate-200">
+                    <tr>
+                        <td colspan="4" class="px-4 py-2.5 text-right text-slate-700 uppercase tracking-wider text-[11px]">Total Realisasi Barang Jadi:</td>
+                        <td class="px-4 py-2.5 text-right font-mono text-cyan-800 text-sm">{{ project.total_act_finished_goods|rupiah }}</td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+    <!-- TAB 4: REALISASI OVERHEAD -->
+    <div x-show="tab === 'overhead'" class="space-y-4" style="display: none;">
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Pengeluaran Biaya Overhead</h2>
+            <button @click="overheadModalOpen = true" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>+ Catat Biaya Overhead</span>
+            </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-2.5">Tanggal</th>
+                        <th class="px-4 py-2.5">Nama Pos Biaya Overhead</th>
+                        <th class="px-4 py-2.5 text-center">Tipe</th>
+                        <th class="px-4 py-2.5 text-right">Biaya Riil</th>
+                        <th class="px-4 py-2.5">Keterangan</th>
+                        <th class="px-4 py-2.5 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for r in overhead_realizations %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-2.5 font-mono text-slate-700 whitespace-nowrap">{{ r.date|date:"Y-m-d" }}</td>
+                        <td class="px-4 py-2.5 font-bold text-slate-900">{{ r.expense_name }}</td>
+                        <td class="px-4 py-2.5 text-center">
+                            {% if r.is_additional %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Biaya Tambahan</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">Terencana</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-right font-mono font-bold text-cyan-800">{{ r.cost|rupiah }}</td>
+                        <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
+                        <td class="px-4 py-2.5 text-center whitespace-nowrap">
+                            <a href="{% url 'realization_overhead_delete' r.uuid %}" onclick="return confirm('Hapus log realisasi overhead ini?');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Hapus</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-6 text-center text-slate-400">Belum ada catatan realisasi overhead.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if overhead_realizations %}
+                <tfoot class="bg-slate-50 font-bold border-t border-slate-200">
+                    <tr>
+                        <td colspan="3" class="px-4 py-2.5 text-right text-slate-700 uppercase tracking-wider text-[11px]">Total Realisasi Overhead:</td>
+                        <td class="px-4 py-2.5 text-right font-mono text-cyan-800 text-sm">{{ project.total_act_overhead|rupiah }}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+    <!-- MODAL 1: INPUT REALISASI MATERIAL -->
+    <div x-show="materialModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="materialModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-900 text-base">Catat Realisasi Pengeluaran Material</h3>
+                <button @click="materialModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form action="{% url 'realization_bom_add' project.uuid %}" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Realisasi</label>
+                    <input type="date" name="date" x-model="materialDate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Item dari BOM Terencana (Opsional)</label>
+                    <select name="bom_item_uuid" x-model="selectedBomItem" @change="
+                        let opt = $event.target.selectedOptions[0];
+                        if (opt && opt.value) {
+                            materialName = opt.getAttribute('data-name') || '';
+                            materialUnit = opt.getAttribute('data-unit') || 'pcs';
+                            materialCost = opt.getAttribute('data-cost') || 0;
+                            isMaterialSubstitute = false;
+                        }
+                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <option value="">-- [Material Pengganti / Tidak Ada di BOM] --</option>
+                        {% for b in bom_items %}
+                        <option value="{{ b.uuid }}" data-name="{{ b.name }}" data-unit="{{ b.unit }}" data-cost="{{ b.est_unit_cost }}">
+                            {{ b.name }} (Est: {{ b.est_qty|rupiah }} {{ b.unit }} @ {{ b.est_unit_cost|rupiah }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Material Riil</label>
+                    <input type="text" name="item_name" x-model="materialName" required placeholder="Nama bahan/material aktual" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Quantity</label>
+                        <input type="number" step="0.01" name="qty" x-model="materialQty" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan (Unit)</label>
+                        <input type="text" name="unit" x-model="materialUnit" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Harga Satuan Riil (Tanpa Rp)</label>
+                    <input type="number" step="0.01" name="unit_cost" x-model="materialCost" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" name="is_substitute" value="1" id="mat_sub" x-model="isMaterialSubstitute" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    <label for="mat_sub" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Material Pengganti (Substitusi)</label>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
+                    <textarea name="notes" rows="2" placeholder="Nomor nota, supplier, alasan ganti, dll" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="materialModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold shadow">Simpan Realisasi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- MODAL 2: INPUT REALISASI TENAGA KERJA -->
+    <div x-show="laborModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="laborModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-900 text-base">Catat Realisasi Tenaga Kerja</h3>
+                <button @click="laborModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form action="{% url 'realization_labor_add' project.uuid %}" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Kerja</label>
+                    <input type="date" name="date" x-model="laborDate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih dari Rencana Tenaga Kerja (Opsional)</label>
+                    <select name="labor_item_uuid" x-model="selectedLaborItem" @change="
+                        let opt = $event.target.selectedOptions[0];
+                        if (opt && opt.value) {
+                            laborRoleName = opt.getAttribute('data-role') || '';
+                            laborUnit = opt.getAttribute('data-unit') || 'jam';
+                            laborRate = opt.getAttribute('data-rate') || 0;
+                            isLaborAdditional = false;
+                        }
+                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <option value="">-- [Tenaga Kerja Tambahan / Tidak Terencana] --</option>
+                        {% for l in labor_items %}
+                        <option value="{{ l.uuid }}" data-role="{{ l.role_name }}" data-unit="{{ l.unit }}" data-rate="{{ l.est_rate }}">
+                            {{ l.role_name }} (Est: {{ l.est_quantity|rupiah }} {{ l.unit }} @ {{ l.est_rate|rupiah }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Peran / Nama Tenaga Kerja</label>
+                    <input type="text" name="role_name" x-model="laborRoleName" required placeholder="Tukang Las, Finishing, dll" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Volume / Jumlah Jam</label>
+                        <input type="number" step="0.01" name="quantity" x-model="laborQty" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan</label>
+                        <input type="text" name="unit" x-model="laborUnit" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Tarif Upah Riil</label>
+                    <input type="number" step="0.01" name="rate" x-model="laborRate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" name="is_additional" value="1" id="lab_add" x-model="isLaborAdditional" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    <label for="lab_add" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Tenaga Kerja Tambahan</label>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
+                    <textarea name="notes" rows="2" placeholder="Nama tukang, lembur, pengerjaan khusus..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="laborModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold shadow">Simpan Realisasi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- MODAL 3: INPUT REALISASI BARANG JADI -->
+    <div x-show="fgModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="fgModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-base">Catat Pemakaian Barang Jadi</h3>
+                    <p class="text-[11px] text-slate-500">Otomatis memotong stok barang jadi on-hand.</p>
+                </div>
+                <button @click="fgModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form action="{% url 'realization_fg_add' project.uuid %}" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Pemakaian</label>
+                    <input type="date" name="date" x-model="fgDate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Barang Jadi dari Rencana Project</label>
+                    <select name="project_fg_uuid" x-model="selectedProjectFg" @change="
+                        let opt = $event.target.selectedOptions[0];
+                        if (opt && opt.value) {
+                            fgUnitCost = opt.getAttribute('data-cost') || 0;
+                            selectedFgMaster = '';
+                        }
+                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <option value="">-- [Pilih dari Rencana Project] --</option>
+                        {% for pfg in fg_items %}
+                        <option value="{{ pfg.uuid }}" data-cost="{{ pfg.est_unit_cost }}">
+                            [{{ pfg.finished_good.sku }}] {{ pfg.finished_good.name }} (Stok Tersedia: {{ pfg.finished_good.current_stock }} {{ pfg.finished_good.unit }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div x-show="!selectedProjectFg">
+                    <label class="block font-semibold text-slate-700 mb-1">Atau Pilih dari Master Barang Jadi Lainnya</label>
+                    <select name="fg_uuid" x-model="selectedFgMaster" @change="
+                        let opt = $event.target.selectedOptions[0];
+                        if (opt && opt.value) {
+                            fgUnitCost = opt.getAttribute('data-cost') || 0;
+                        }
+                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <option value="">-- [Pilih Barang Jadi Lain] --</option>
+                        {% for fg in master_finished_goods %}
+                        <option value="{{ fg.uuid }}" data-cost="{{ fg.standard_cost }}">
+                            [{{ fg.sku }}] {{ fg.name }} (Stok: {{ fg.current_stock }} {{ fg.unit }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jumlah Dipakai</label>
+                        <input type="number" step="0.01" name="quantity" x-model="fgQty" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">HPP Satuan Riil</label>
+                        <input type="number" step="0.01" name="unit_cost" x-model="fgUnitCost" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
+                    <textarea name="notes" rows="2" placeholder="Keterangan pengambilan barang..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="fgModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold shadow">Potong Stok & Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- MODAL 4: INPUT REALISASI OVERHEAD -->
+    <div x-show="overheadModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="overheadModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-900 text-base">Catat Pengeluaran Overhead</h3>
+                <button @click="overheadModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form action="{% url 'realization_overhead_add' project.uuid %}" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Pengeluaran</label>
+                    <input type="date" name="date" x-model="overheadDate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih dari Rencana Overhead (Opsional)</label>
+                    <select name="overhead_item_uuid" x-model="selectedOverheadItem" @change="
+                        let opt = $event.target.selectedOptions[0];
+                        if (opt && opt.value) {
+                            overheadName = opt.getAttribute('data-name') || '';
+                            overheadCost = opt.getAttribute('data-cost') || 0;
+                            isOverheadAdditional = false;
+                        }
+                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <option value="">-- [Biaya Overhead Baru / Tak Terduga] --</option>
+                        {% for o in overhead_items %}
+                        <option value="{{ o.uuid }}" data-name="{{ o.name }}" data-cost="{{ o.est_cost }}">
+                            {{ o.name }} (Est: {{ o.est_cost|rupiah }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Pos Biaya Overhead</label>
+                    <input type="text" name="expense_name" x-model="overheadName" required placeholder="Bensin armada, sewa genset, konsumsi..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Biaya Riil (Tanpa Rp)</label>
+                    <input type="number" step="0.01" name="cost" x-model="overheadCost" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" name="is_additional" value="1" id="ovh_add" x-model="isOverheadAdditional" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    <label for="ovh_add" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Biaya Tambahan</label>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
+                    <textarea name="notes" rows="2" placeholder="Kuitansi / detail pengeluaran..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="overheadModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold shadow">Simpan Realisasi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

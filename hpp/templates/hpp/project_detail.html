@@ -1,0 +1,837 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}{{ project.name }} - HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ 
+    tab: 'bom', 
+    editProjectModal: false, 
+    addBomModal: false, 
+    editBomModal: false,
+    currentBom: {},
+    addLaborModal: false, 
+    editLaborModal: false,
+    currentLabor: {},
+    addOverheadModal: false,
+    editOverheadModal: false,
+    currentOverhead: {},
+    addFgModal: false,
+    editFgModal: false,
+    currentProjectFg: {}
+}">
+    <!-- Alert Message jika ada -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-lg text-xs font-semibold {% if message.tags == 'error' %}bg-rose-100 text-rose-800 border border-rose-200{% else %}bg-emerald-100 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Top Action & Title -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+            <div class="flex items-center gap-3 mb-1">
+                <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-1 rounded">#{{ project.code }}</span>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold
+                    {% if project.status == 'completed' %}bg-emerald-100 text-emerald-800
+                    {% elif project.status == 'in_progress' %}bg-blue-100 text-blue-800
+                    {% elif project.status == 'cancelled' %}bg-red-100 text-red-800
+                    {% else %}bg-slate-100 text-slate-800{% endif %}">
+                    {{ project.get_status_display }}
+                </span>
+                {% if project.stock_released %}
+                <span class="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
+                    Stock Released
+                </span>
+                {% endif %}
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">{{ project.name }}</h1>
+            <p class="text-sm text-slate-500">Customer: <strong class="text-slate-700">{{ project.customer_name|default:"-" }}</strong></p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <button @click="editProjectModal = true" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition">Edit Status / Info</button>
+            <a href="{% url 'export_project_excel' project.uuid %}" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md transition shadow">Export Excel</a>
+            <a href="{% url 'print_project_pdf' project.uuid %}" target="_blank" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md transition shadow">Print / PDF</a>
+        </div>
+    </div>
+
+    <!-- Summary KPI Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Nilai Kontrak</span>
+            <div class="text-lg font-bold text-slate-800 mt-1">Rp {{ project.contract_value|rupiah }}</div>
+            <div class="text-xs text-slate-400 mt-1">Progress: {{ project.progress_percentage }}%</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Estimasi HPP</span>
+            <div class="text-lg font-bold text-indigo-700 mt-1">Rp {{ project.total_hpp_estimated|rupiah }}</div>
+            <div class="text-xs text-slate-400 mt-1">BOM, Labor, FG, Overhead</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm bg-indigo-50/40">
+            <span class="text-xs font-medium text-indigo-600 uppercase font-bold">Gross Profit Estimasi</span>
+            <div class="text-lg font-bold {% if project.est_gross_profit < 0 %}text-rose-600{% else %}text-indigo-900{% endif %} mt-1">
+                Rp {{ project.est_gross_profit|rupiah }}
+            </div>
+            <div class="text-xs font-semibold text-indigo-600 mt-1">Margin: {{ project.est_margin_pct|rupiah }}%</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Realisasi HPP</span>
+            <div class="text-lg font-bold {% if project.total_hpp_actual > project.total_hpp_estimated %}text-rose-600{% else %}text-slate-800{% endif %} mt-1">
+                Rp {{ project.total_hpp_actual|rupiah }}
+            </div>
+            <div class="text-xs {% if project.total_hpp_actual > project.total_hpp_estimated %}text-rose-500 font-semibold{% else %}text-slate-400{% endif %} mt-1">
+                Deviasi: Rp {{ project.total_hpp_actual|add:"-project.total_hpp_estimated"|rupiah }}
+            </div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-medium text-slate-400 uppercase">Gross Profit Realisasi</span>
+            <div class="text-lg font-bold {% if project.act_gross_profit < 0 %}text-rose-600{% else %}text-emerald-700{% endif %} mt-1">
+                Rp {{ project.act_gross_profit|rupiah }}
+            </div>
+            <div class="text-xs {% if project.act_gross_profit < 0 %}text-rose-500{% else %}text-emerald-600{% endif %} mt-1 font-semibold">
+                Margin: {{ project.act_margin_pct|rupiah }}%
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="border-b border-slate-200 flex space-x-6 text-sm font-semibold">
+        <button @click="tab = 'bom'" :class="tab === 'bom' ? 'border-indigo-600 text-indigo-600 border-b-2' : 'text-slate-500 hover:text-slate-700'" class="pb-3 px-1 flex items-center gap-2">
+            <span>Bill of Materials (BOM)</span>
+            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{{ materials.count }}</span>
+        </button>
+        <button @click="tab = 'labor'" :class="tab === 'labor' ? 'border-indigo-600 text-indigo-600 border-b-2' : 'text-slate-500 hover:text-slate-700'" class="pb-3 px-1 flex items-center gap-2">
+            <span>Tenaga Kerja (Labor)</span>
+            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{{ labors.count }}</span>
+        </button>
+        <button @click="tab = 'fg'" :class="tab === 'fg' ? 'border-indigo-600 text-indigo-600 border-b-2' : 'text-slate-500 hover:text-slate-700'" class="pb-3 px-1 flex items-center gap-2">
+            <span>Barang Jadi</span>
+            <span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-bold">{{ finished_goods.count }}</span>
+        </button>
+        <button @click="tab = 'overhead'" :class="tab === 'overhead' ? 'border-indigo-600 text-indigo-600 border-b-2' : 'text-slate-500 hover:text-slate-700'" class="pb-3 px-1 flex items-center gap-2">
+            <span>Biaya Overhead</span>
+            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{{ overheads.count }}</span>
+        </button>
+    </div>
+
+    <!-- TAB 1: BOM -->
+    <div x-show="tab === 'bom'" class="space-y-4">
+        <div class="flex justify-between items-center">
+            <h2 class="text-lg font-bold text-slate-800">Daftar Bahan & Sub-Assembly (BOM)</h2>
+            <button @click="addBomModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Item BOM</button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-slate-200 text-xs sm:text-sm">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-3">Nama Material / Sub-Assembly</th>
+                        <th class="px-4 py-3">Tipe</th>
+                        <th class="px-4 py-3 text-right">Est. Qty & Harga</th>
+                        <th class="px-4 py-3 text-right">Est. Total</th>
+                        <th class="px-4 py-3 text-right">Real. Qty & Harga</th>
+                        <th class="px-4 py-3 text-right">Real. Total</th>
+                        <th class="px-4 py-3 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for m in materials %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-1.5" style="padding-left: calc({{ m.tree_depth|default:0 }} * 1.5rem);">
+                                {% if m.tree_depth and m.tree_depth > 0 %}
+                                <span class="text-slate-400 font-mono text-xs">&boxur;&horbar;</span>
+                                {% endif %}
+                                <span class="font-semibold text-slate-900 {% if m.item_type == 'assembly' %}text-indigo-900 font-bold{% endif %}">
+                                    {{ m.name }}
+                                </span>
+                            </div>
+
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-0.5 rounded text-[11px] font-semibold {% if m.item_type == 'assembly' %}bg-purple-100 text-purple-800{% else %}bg-slate-100 text-slate-700{% endif %}">
+                                {{ m.get_item_type_display }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-right text-slate-600">
+                            {% if m.item_type == 'material' %}{{ m.est_qty|rupiah }} {{ m.unit }} &times; Rp {{ m.est_unit_cost|rupiah }}{% else %}-{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-800">Rp {{ m.est_total|rupiah }}</td>
+                        <td class="px-4 py-3 text-right text-slate-600">
+                            {% if m.item_type == 'material' %}{{ m.act_qty|rupiah }} {{ m.unit }} &times; Rp {{ m.act_unit_cost|rupiah }}{% else %}-{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-semibold {% if m.act_total > m.est_total %}text-rose-600{% else %}text-slate-800{% endif %}">
+                            Rp {{ m.act_total|rupiah }}
+                        </td>
+                        <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                            <button @click="currentBom = {
+                                id: '{{ m.uuid }}',
+                                name: '{{ m.name|escapejs }}',
+                                item_type: '{{ m.item_type }}',
+                                unit: '{{ m.unit|escapejs }}',
+                                est_qty: '{{ m.est_qty }}',
+                                est_unit_cost: '{{ m.est_unit_cost }}',
+                                act_qty: '{{ m.act_qty }}',
+                                act_unit_cost: '{{ m.act_unit_cost }}',
+                                parent_uuid: '{{ m.parent.uuid|default:'' }}'
+                            }; editBomModal = true" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs px-1">Edit</button>
+                            <span class="text-slate-300">|</span>
+                            <form action="{% url 'bom_item_delete' m.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus item ini?')">
+                                {% csrf_token %}
+                                <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold text-xs px-1">Hapus</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">Belum ada material/sub-assembly di BOM.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-50 font-semibold text-slate-800 border-t border-slate-200">
+                    <tr>
+                        <td colspan="3" class="px-4 py-3 text-right uppercase text-xs">Subtotal Material:</td>
+                        <td class="px-4 py-3 text-right">Rp {{ project.total_est_material|rupiah }}</td>
+                        <td></td>
+                        <td class="px-4 py-3 text-right">Rp {{ project.total_act_material|rupiah }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB 2: LABOR -->
+    <div x-show="tab === 'labor'" class="space-y-4" style="display: none;">
+        <div class="flex justify-between items-center">
+            <h2 class="text-lg font-bold text-slate-800">Biaya Tenaga Kerja</h2>
+            <button @click="addLaborModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Tenaga Kerja</button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-slate-200 text-xs sm:text-sm">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-3">Peran / Posisi</th>
+                        <th class="px-4 py-3 text-right">Est. Qty & Tarif</th>
+                        <th class="px-4 py-3 text-right">Est. Total</th>
+                        <th class="px-4 py-3 text-right">Real. Qty & Tarif</th>
+                        <th class="px-4 py-3 text-right">Real. Total</th>
+                        <th class="px-4 py-3 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for l in labors %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-3 font-medium text-slate-800">{{ l.role_name }}</td>
+                        <td class="px-4 py-3 text-right text-slate-600">{{ l.est_quantity|rupiah }} {{ l.unit }} &times; Rp {{ l.est_rate|rupiah }}</td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-800">Rp {{ l.est_total|rupiah }}</td>
+                        <td class="px-4 py-3 text-right text-slate-600">{{ l.act_quantity|rupiah }} {{ l.unit }} &times; Rp {{ l.act_rate|rupiah }}</td>
+                        <td class="px-4 py-3 text-right font-semibold {% if l.act_total > l.est_total %}text-rose-600{% else %}text-slate-800{% endif %}">Rp {{ l.act_total|rupiah }}</td>
+                        <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                            <button @click="currentLabor = {
+                                id: '{{ l.uuid }}',
+                                role_name: '{{ l.role_name|escapejs }}',
+                                unit: '{{ l.unit|escapejs }}',
+                                est_quantity: '{{ l.est_quantity }}',
+                                est_rate: '{{ l.est_rate }}',
+                                act_quantity: '{{ l.act_quantity }}',
+                                act_rate: '{{ l.act_rate }}'
+                            }; editLaborModal = true" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs px-1">Edit</button>
+                            <span class="text-slate-300">|</span>
+                            <form action="{% url 'labor_delete' l.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus tenaga kerja ini?')">
+                                {% csrf_token %}
+                                <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold text-xs px-1">Hapus</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Belum ada item tenaga kerja.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-50 font-semibold text-slate-800 border-t border-slate-200">
+                    <tr>
+                        <td colspan="2" class="px-4 py-3 text-right uppercase text-xs">Subtotal Tenaga Kerja:</td>
+                        <td class="px-4 py-3 text-right">Rp {{ project.total_est_labor|rupiah }}</td>
+                        <td></td>
+                        <td class="px-4 py-3 text-right">Rp {{ project.total_act_labor|rupiah }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB 3: BARANG JADI (FINISHED GOODS) -->
+    <div x-show="tab === 'fg'" class="space-y-4" style="display: none;">
+        <div class="flex justify-between items-center">
+            <div>
+                <h2 class="text-lg font-bold text-slate-800">Daftar Barang Jadi Penyusun Project</h2>
+                <p class="text-xs text-slate-500">Stock barang jadi akan otomatis dipotong saat status project diubah menjadi <strong>Selesai (Completed)</strong>.</p>
+            </div>
+            <button @click="addFgModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Barang Jadi</button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-slate-200 text-xs sm:text-sm">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-3">SKU & Nama Barang Jadi</th>
+                        <th class="px-4 py-3">Stock Tersedia</th>
+                        <th class="px-4 py-3 text-right">Est. Kebutuhan</th>
+                        <th class="px-4 py-3 text-right">Est. Total</th>
+                        <th class="px-4 py-3 text-right">Real. Kebutuhan</th>
+                        <th class="px-4 py-3 text-right">Real. Total</th>
+                        <th class="px-4 py-3 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for item in finished_goods %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-3">
+                            <div class="font-semibold text-slate-900">{{ item.finished_good.name }}</div>
+                            <span class="text-xs font-mono text-slate-400">#{{ item.finished_good.sku }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold {% if item.finished_good.current_stock > 0 %}bg-emerald-100 text-emerald-800{% else %}bg-rose-100 text-rose-800{% endif %}">
+                                {{ item.finished_good.current_stock|rupiah }} {{ item.finished_good.unit }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-right text-slate-600">
+                            {{ item.est_qty|rupiah }} {{ item.finished_good.unit }} &times; Rp {{ item.est_unit_cost|rupiah }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-800">
+                            Rp {{ item.est_total|rupiah }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-slate-600">
+                            {{ item.act_qty|rupiah }} {{ item.finished_good.unit }} &times; Rp {{ item.act_unit_cost|rupiah }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-semibold {% if item.act_total > item.est_total %}text-rose-600{% else %}text-slate-800{% endif %}">
+                            Rp {{ item.act_total|rupiah }}
+                        </td>
+                        <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                            <button @click="currentProjectFg = {
+                                uuid: '{{ item.uuid }}',
+                                name: '{{ item.finished_good.name|escapejs }}',
+                                unit: '{{ item.finished_good.unit|escapejs }}',
+                                est_qty: '{{ item.est_qty }}',
+                                est_unit_cost: '{{ item.est_unit_cost }}',
+                                act_qty: '{{ item.act_qty }}',
+                                act_unit_cost: '{{ item.act_unit_cost }}',
+                                notes: '{{ item.notes|escapejs }}'
+                            }; editFgModal = true" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs px-1">Edit</button>
+                            <span class="text-slate-300">|</span>
+                            <form action="{% url 'project_fg_delete' item.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus barang jadi {{ item.finished_good.name }} dari project?')">
+                                {% csrf_token %}
+                                <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold text-xs px-1">Hapus</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-4 py-6 text-center text-slate-400">Belum ada barang jadi yang dimasukkan ke project ini.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-50 font-semibold text-slate-800 border-t border-slate-200">
+                    <tr>
+                        <td colspan="3" class="px-4 py-3 text-right uppercase text-xs">Subtotal Barang Jadi:</td>
+                        <td class="px-4 py-3 text-right">Rp {{ project.total_est_finished_goods|rupiah }}</td>
+                        <td></td>
+                        <td class="px-4 py-3 text-right">Rp {{ project.total_act_finished_goods|rupiah }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB 4: OVERHEAD -->
+    <div x-show="tab === 'overhead'" class="space-y-4" style="display: none;">
+        <div class="flex justify-between items-center">
+            <h2 class="text-lg font-bold text-slate-800">Biaya Overhead / Lain-lain</h2>
+            <button @click="addOverheadModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Overhead</button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-slate-200 text-xs sm:text-sm">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-3">Deskripsi Biaya</th>
+                        <th class="px-4 py-3 text-right">Est. Biaya</th>
+                        <th class="px-4 py-3 text-right">Real. Biaya</th>
+                        <th class="px-4 py-3 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for o in overheads %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-3 font-medium text-slate-800">{{ o.name }}</td>
+                        <td class="px-4 py-3 text-right text-slate-800">Rp {{ o.est_cost|rupiah }}</td>
+                        <td class="px-4 py-3 text-right font-semibold {% if o.act_cost > o.est_cost %}text-rose-600{% else %}text-slate-800{% endif %}">Rp {{ o.act_cost|rupiah }}</td>
+                        <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                            <button @click="currentOverhead = {
+                                id: '{{ o.uuid }}',
+                                name: '{{ o.name|escapejs }}',
+                                est_cost: '{{ o.est_cost }}',
+                                act_cost: '{{ o.act_cost }}'
+                            }; editOverheadModal = true" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs px-1">Edit</button>
+                            <span class="text-slate-300">|</span>
+                            <form action="{% url 'overhead_delete' o.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus biaya ini?')">
+                                {% csrf_token %}
+                                <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold text-xs px-1">Hapus</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Belum ada item overhead.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-50 font-semibold text-slate-800 border-t border-slate-200">
+                    <tr>
+                        <td class="px-4 py-3 text-right uppercase text-xs">Subtotal Overhead:</td>
+                        <td class="px-4 py-3 text-right">Rp {{ project.total_est_overhead|rupiah }}</td>
+                        <td class="px-4 py-3 text-right">Rp {{ project.total_act_overhead|rupiah }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Project -->
+    <div x-show="editProjectModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editProjectModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Update Informasi Project</h3>
+            <form action="{% url 'project_update' project.uuid %}" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Project</label>
+                    <input type="text" name="name" value="{{ project.name }}" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kode</label>
+                        <input type="text" name="code" value="{{ project.code }}" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Customer</label>
+                        <input type="text" name="customer_name" value="{{ project.customer_name }}" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nilai Kontrak (Rp)</label>
+                        <input type="number" step="0.01" name="contract_value" value="{{ project.contract_value }}" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Progress (%)</label>
+                        <input type="number" min="0" max="100" name="progress_percentage" value="{{ project.progress_percentage }}" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status</label>
+                    <select name="status" class="w-full rounded border border-slate-300 p-2 text-sm">
+                        {% for code, label in status_choices %}
+                        <option value="{{ code }}" {% if project.status == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-[11px] text-amber-600 mt-1">Mengubah status ke <strong>Selesai (Completed)</strong> akan memotong persediaan stock barang jadi.</p>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editProjectModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Add BOM Item -->
+    <div x-show="addBomModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="addBomModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4" x-data="{ selectedMaster: '', nameInput: '', unitInput: 'pcs', estCostInput: 0 }">
+            <h3 class="text-lg font-bold text-slate-900">Tambah Item BOM</h3>
+            <form action="{% url 'bom_item_add' project.uuid %}" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tipe Item</label>
+                        <select name="item_type" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            <option value="material">Material Mentah</option>
+                            <option value="assembly">Sub-Assembly (Rakitan)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Pilih Master (Opsional)</label>
+                        <select class="w-full rounded border border-slate-300 p-2 text-sm" 
+                                @change="if($event.target.value){ 
+                                    let opt = $event.target.options[$event.target.selectedIndex]; 
+                                    nameInput = opt.dataset.name; 
+                                    unitInput = opt.dataset.unit; 
+                                    estCostInput = opt.dataset.cost; 
+                                }">
+                            <option value="">-- Ketik Bebas / Pilih Master --</option>
+                            {% for mm in master_materials %}
+                            <option value="{{ mm.id }}" data-name="{{ mm.name }}" data-unit="{{ mm.unit }}" data-cost="{{ mm.standard_cost }}">{{ mm.name }} ({{ mm.unit }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Item / Part *</label>
+                        <input type="text" name="name" x-model="nameInput" required placeholder="Contoh: Besi Hollow 4x4" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
+                        <input type="text" name="unit" x-model="unitInput" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Sub-Assembly Induk (Jika Rakitan Bertingkat)</label>
+                    <select name="parent_uuid" class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <option value="">-- Level Teratas (Bukan Bagian Rakitan Lain) --</option>
+                        {% for m in materials %}
+                        {% if m.item_type == 'assembly' %}
+                        <option value="{{ m.uuid }}">{{ m.name }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
+                    <span class="text-xs font-bold text-slate-700">Estimasi Kebutuhan</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-slate-500">Estimasi Qty</label>
+                            <input type="number" step="0.01" name="est_qty" value="1" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-500">Est. Harga Satuan (Rp)</label>
+                            <input type="number" step="0.01" name="est_unit_cost" x-model="estCostInput" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
+                    <input type="text" name="notes" placeholder="Catatan spesifikasi..." class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="addBomModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan ke BOM</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit BOM Item -->
+    <div x-show="editBomModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editBomModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Edit Item BOM</h3>
+            <form :action="'/bom/' + currentBom.id + '/update/'" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tipe Item</label>
+                        <select name="item_type" x-model="currentBom.item_type" class="w-full rounded border border-slate-300 p-2 text-sm">
+                            <option value="material">Material Mentah</option>
+                            <option value="assembly">Sub-Assembly (Rakitan)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
+                        <input type="text" name="unit" x-model="currentBom.unit" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Item / Part *</label>
+                    <input type="text" name="name" x-model="currentBom.name" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Sub-Assembly Induk</label>
+                    <select name="parent_uuid" x-model="currentBom.parent_uuid" class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <option value="">-- Level Teratas (Bukan Bagian Rakitan Lain) --</option>
+                        {% for m in materials %}
+                        {% if m.item_type == 'assembly' %}
+                        <option value="{{ m.uuid }}" x-show="currentBom.id !== '{{ m.uuid }}'">{{ m.name }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
+                    <span class="text-xs font-bold text-slate-700">Estimasi Kebutuhan</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-slate-500">Estimasi Qty</label>
+                            <input type="number" step="0.01" name="est_qty" x-model="currentBom.est_qty" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-500">Est. Harga Satuan (Rp)</label>
+                            <input type="number" step="0.01" name="est_unit_cost" x-model="currentBom.est_unit_cost" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editBomModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Add Labor -->
+    <div x-show="addLaborModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="addLaborModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4" x-data="{ roleInput: '', unitInput: 'jam', rateInput: 0 }">
+            <h3 class="text-lg font-bold text-slate-900">Tambah Biaya Tenaga Kerja</h3>
+            <form action="{% url 'labor_add' project.uuid %}" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Pilih Master (Opsional)</label>
+                    <select class="w-full rounded border border-slate-300 p-2 text-sm"
+                            @change="if($event.target.value){
+                                let opt = $event.target.options[$event.target.selectedIndex];
+                                roleInput = opt.dataset.role;
+                                unitInput = opt.dataset.unit;
+                                rateInput = opt.dataset.rate;
+                            }">
+                        <option value="">-- Ketik Bebas / Pilih Master --</option>
+                        {% for lm in master_labors %}
+                        <option value="{{ lm.id }}" data-role="{{ lm.role_name }}" data-unit="{{ lm.unit }}" data-rate="{{ lm.standard_rate }}">{{ lm.role_name }} ({{ lm.unit }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Peran / Pekerjaan *</label>
+                        <input type="text" name="role_name" x-model="roleInput" required placeholder="Tukang Las / Finishing" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
+                        <input type="text" name="unit" x-model="unitInput" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Est. Kuantitas/Jam</label>
+                        <input type="number" step="0.01" name="est_quantity" value="1" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Est. Tarif (Rp)</label>
+                        <input type="number" step="0.01" name="est_rate" x-model="rateInput" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Real. Kuantitas/Jam</label>
+                        <input type="number" step="0.01" name="act_quantity" value="0" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Real. Tarif (Rp)</label>
+                        <input type="number" step="0.01" name="act_rate" value="0" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="addLaborModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Labor -->
+    <div x-show="editLaborModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editLaborModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Edit Biaya Tenaga Kerja</h3>
+            <form :action="'/labor/' + currentLabor.id + '/update/'" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Peran / Pekerjaan *</label>
+                        <input type="text" name="role_name" x-model="currentLabor.role_name" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
+                        <input type="text" name="unit" x-model="currentLabor.unit" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Est. Kuantitas/Jam</label>
+                        <input type="number" step="0.01" name="est_quantity" x-model="currentLabor.est_quantity" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Est. Tarif (Rp)</label>
+                        <input type="number" step="0.01" name="est_rate" x-model="currentLabor.est_rate" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Real. Kuantitas/Jam</label>
+                        <input type="number" step="0.01" name="act_quantity" x-model="currentLabor.act_quantity" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Real. Tarif (Rp)</label>
+                        <input type="number" step="0.01" name="act_rate" x-model="currentLabor.act_rate" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editLaborModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Add Project Finished Good -->
+    <div x-show="addFgModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="addFgModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4" x-data="{ selectedFgCost: 0 }">
+            <h3 class="text-lg font-bold text-slate-900">Tambah Barang Jadi ke Project</h3>
+            <form action="{% url 'project_fg_add' project.uuid %}" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Pilih Master Barang Jadi *</label>
+                    <select name="finished_good_uuid" required class="w-full rounded border border-slate-300 p-2 text-sm"
+                            @change="if($event.target.value){
+                                let opt = $event.target.options[$event.target.selectedIndex];
+                                selectedFgCost = opt.dataset.cost;
+                            }">
+                        <option value="">-- Pilih Barang Jadi --</option>
+                        {% for fg in master_finished_goods %}
+                        <option value="{{ fg.uuid }}" data-cost="{{ fg.standard_cost }}">
+                            [{{ fg.sku }}] {{ fg.name }} (Stock: {{ fg.current_stock|rupiah }} {{ fg.unit }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
+                    <span class="text-xs font-bold text-slate-700">Estimasi Kebutuhan</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-slate-500">Estimasi Jumlah</label>
+                            <input type="number" step="0.01" name="est_qty" value="1" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-500">Est. Cost Satuan (Rp)</label>
+                            <input type="number" step="0.01" name="est_unit_cost" x-model="selectedFgCost" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
+                    <input type="text" name="notes" placeholder="Catatan part barang jadi..." class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="addFgModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan ke Project</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Project Finished Good -->
+    <div x-show="editFgModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editFgModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Edit Barang Jadi di Project</h3>
+            <p class="text-xs text-slate-500">Barang: <strong x-text="currentProjectFg.name" class="text-slate-800"></strong></p>
+            <form :action="'/project-fg/' + currentProjectFg.uuid + '/update/'" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
+                    <span class="text-xs font-bold text-slate-700">Estimasi Kebutuhan</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-slate-500">Estimasi Jumlah</label>
+                            <input type="number" step="0.01" name="est_qty" x-model="currentProjectFg.est_qty" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-500">Est. Cost Satuan (Rp)</label>
+                            <input type="number" step="0.01" name="est_unit_cost" x-model="currentProjectFg.est_unit_cost" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
+                    <input type="text" name="notes" x-model="currentProjectFg.notes" class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editFgModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Add Overhead -->
+    <div x-show="addOverheadModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="addOverheadModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Tambah Biaya Overhead</h3>
+            <form action="{% url 'overhead_add' project.uuid %}" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Deskripsi Biaya *</label>
+                    <input type="text" name="name" required placeholder="Sewa Alat / Ongkos Kirim / Konsumsi" class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Estimasi Biaya (Rp)</label>
+                        <input type="number" step="0.01" name="est_cost" value="0" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="addOverheadModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Overhead -->
+    <div x-show="editOverheadModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editOverheadModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">Edit Biaya Overhead</h3>
+            <form :action="'/overhead/' + currentOverhead.id + '/update/'" method="POST" class="space-y-3">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Deskripsi Biaya *</label>
+                    <input type="text" name="name" x-model="currentOverhead.name" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Estimasi Biaya (Rp)</label>
+                        <input type="number" step="0.01" name="est_cost" x-model="currentOverhead.est_cost" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    </div>
+                    
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editOverheadModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
