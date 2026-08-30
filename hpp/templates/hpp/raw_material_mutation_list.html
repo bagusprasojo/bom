@@ -1,0 +1,210 @@
+﻿{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Mutasi Stok Bahan Baku - HPP & Manufaktur{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ 
+    mutationModalOpen: false, 
+    mutationType: 'IN',
+    selectedMat: '',
+    selectedUnit: '',
+    unitPrice: 0,
+    qty: 1
+}">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'raw_material_list' %}" class="hover:text-emerald-600">Bahan Baku</a>
+                <span>&rsaquo;</span>
+                <span>Mutasi Stok</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">Mutasi Stok Bahan Baku</h1>
+            <p class="text-sm text-slate-500">Pencatatan barang masuk dari supplier, barang rusak, maupun mutasi keluar.</p>
+        </div>
+        <button @click="mutationModalOpen = true" class="px-3.5 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 shadow flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>+ Catat Mutasi Masuk / Keluar</span>
+        </button>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-lg text-xs font-semibold {% if message.tags == 'error' %}bg-rose-100 text-rose-800 border border-rose-200{% else %}bg-emerald-100 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Filter Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form method="GET" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+                <input type="text" name="q" value="{{ query }}" placeholder="Cari ref, catatan, nama bahan..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+            </div>
+            <div>
+                <select name="mat" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <option value="">-- Semua Bahan Baku --</option>
+                    {% for m in materials %}
+                    <option value="{{ m.uuid }}" {% if selected_mat == m.uuid|stringformat:"s" %}selected{% endif %}>{{ m.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <select name="type" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <option value="">-- Semua Tipe Mutasi --</option>
+                    <option value="IN" {% if selected_type == 'IN' %}selected{% endif %}>Stock Masuk (In)</option>
+                    <option value="OUT" {% if selected_type == 'OUT' %}selected{% endif %}>Stock Keluar (Out)</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="submit" class="w-full px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-md hover:bg-slate-700">Filter</button>
+                <a href="{% url 'raw_material_stock_mutation_list' %}" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-md hover:bg-slate-200">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Table Mutations -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 text-xs">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">Waktu / Tanggal</th>
+                    <th class="px-4 py-3">Bahan Baku</th>
+                    <th class="px-4 py-3 text-center">Arah Mutasi</th>
+                    <th class="px-4 py-3 text-right">Jumlah Transaksi</th>
+                    <th class="px-4 py-3 text-right">Stok Dasar</th>
+                    <th class="px-4 py-3 text-right">Sisa Stok Akhir</th>
+                    <th class="px-4 py-3">No. Referensi / Project</th>
+                    <th class="px-4 py-3">Keterangan</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for mut in mutations %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 font-mono text-slate-700 whitespace-nowrap">{{ mut.created_at|date:"Y-m-d H:i" }}</td>
+                    <td class="px-4 py-3">
+                        <a href="{% url 'raw_material_stock_card' mut.raw_material.uuid %}" class="font-bold text-emerald-700 hover:underline block">
+                            {{ mut.raw_material.name }}
+                        </a>
+                        <span class="font-mono text-[10px] text-slate-400">#{{ mut.raw_material.code }}</span>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        {% if mut.mutation_type == 'IN' %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            MASUK (IN)
+                        </span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
+                            KELUAR (OUT)
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono font-bold text-slate-800">
+                        {{ mut.input_qty|rupiah }} {{ mut.input_unit }}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-slate-600">
+                        {{ mut.stock_qty|rupiah }} {{ mut.raw_material.stock_unit }}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono font-bold text-slate-900">
+                        {{ mut.balance_after|rupiah }} {{ mut.raw_material.stock_unit }}
+                    </td>
+                    <td class="px-4 py-3 font-mono text-slate-700 font-medium">
+                        {{ mut.reference_no|default:"-" }}
+                        {% if mut.project %}
+                        <span class="block text-[10px] text-indigo-600">Project: #{{ mut.project.code }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-slate-500">{{ mut.notes|default:"-" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="px-4 py-8 text-center text-slate-400">Belum ada riwayat transaksi mutasi bahan baku.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MODAL CATAT MUTASI -->
+    <div x-show="mutationModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="mutationModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-900 text-base">Catat Mutasi Bahan Baku</h3>
+                <button @click="mutationModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form action="{% url 'raw_material_mutation_create' %}" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Arah Mutasi *</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center gap-2 p-2 rounded border cursor-pointer" :class="mutationType === 'IN' ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold' : 'border-slate-300'">
+                            <input type="radio" name="mutation_type" value="IN" x-model="mutationType">
+                            <span>Barang Masuk / Beli (IN)</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 rounded border cursor-pointer" :class="mutationType === 'OUT' ? 'border-rose-500 bg-rose-50 text-rose-800 font-bold' : 'border-slate-300'">
+                            <input type="radio" name="mutation_type" value="OUT" x-model="mutationType">
+                            <span>Barang Rusak / Keluar (OUT)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Bahan Baku *</label>
+                    <select name="material_uuid" required x-model="selectedMat" @change="
+                        let opt = $event.target.selectedOptions[0];
+                        if (opt && opt.value) {
+                            selectedUnit = opt.getAttribute('data-unit') || '';
+                            unitPrice = opt.getAttribute('data-price') || 0;
+                        }
+                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <option value="">-- Pilih Bahan Baku --</option>
+                        {% for m in materials %}
+                        <option value="{{ m.uuid }}" data-unit="{{ m.stock_unit }}" data-price="{{ m.last_purchase_price }}">
+                            [{{ m.code }}] {{ m.name }} (Stok: {{ m.current_stock|rupiah }} {{ m.stock_unit }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jumlah *</label>
+                        <input type="number" step="0.0001" name="input_qty" x-model="qty" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono font-bold">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan Transaksi</label>
+                        <input type="text" name="input_unit" x-model="selectedUnit" placeholder="pcs, dus, batang..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    </div>
+                </div>
+
+                <div x-show="mutationType === 'IN'">
+                    <label class="block font-semibold text-slate-700 mb-1">Harga Beli per Satuan Transaksi (Rp)</label>
+                    <input type="number" step="0.01" name="unit_price" x-model="unitPrice" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    <p class="text-[10px] text-slate-400 mt-0.5">Harga ini akan otomatis mengupdate harga beli terakhir bahan baku.</p>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">No. Referensi / Surat Jalan / Faktur</label>
+                    <input type="text" name="reference_no" placeholder="Contoh: PO-2026-08, SJ-991" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Keterangan</label>
+                    <textarea name="notes" rows="2" placeholder="Nama supplier, alasan keluar/rusak..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="mutationModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold shadow">Simpan Mutasi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

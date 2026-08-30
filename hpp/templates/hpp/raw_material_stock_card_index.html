@@ -1,0 +1,123 @@
+﻿{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Kartu Stok Bahan Baku - HPP & Manufaktur{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'raw_material_list' %}" class="hover:text-emerald-600">Bahan Baku</a>
+                <span>&rsaquo;</span>
+                <span>Kartu Stok</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">Kartu Stok Bahan Baku</h1>
+            <p class="text-sm text-slate-500">Pilih bahan baku untuk melihat rincian riwayat arus barang masuk, pemakaian, dan sisa stok.</p>
+        </div>
+    </div>
+
+    <!-- Selector Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form method="GET" class="flex flex-col sm:flex-row items-center gap-3">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-600 shrink-0">Pilih Bahan Baku:</label>
+            <select name="mat" onchange="this.form.submit()" class="w-full sm:w-96 rounded-md border border-slate-300 px-3 py-2 text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500">
+                {% for m in materials %}
+                <option value="{{ m.uuid }}" {% if selected_mat.uuid == m.uuid %}selected{% endif %}>
+                    [{{ m.code }}] {{ m.name }} (Stok: {{ m.current_stock|rupiah }} {{ m.stock_unit }})
+                </option>
+                {% endfor %}
+            </select>
+            {% if selected_mat %}
+            <a href="{% url 'raw_material_stock_mutation_list' %}?mat={{ selected_mat.uuid }}" class="px-3.5 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-md hover:bg-emerald-700 shadow shrink-0">
+                + Input Mutasi
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if selected_mat %}
+    <!-- Summary KPI -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Stok On-Hand Saat Ini</span>
+            <span class="text-2xl font-black text-slate-900 font-mono mt-1 block">{{ selected_mat.current_stock|rupiah }} {{ selected_mat.stock_unit }}</span>
+            <span class="text-[10px] text-slate-400 mt-1 block">Satuan dasar gudang</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Harga Beli Terakhir</span>
+            <span class="text-2xl font-black text-slate-800 font-mono mt-1 block">Rp {{ selected_mat.last_purchase_price|rupiah }}</span>
+            <span class="text-[10px] text-slate-400 mt-1 block">Per 1 {{ selected_mat.stock_unit }}</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-700 block">Total Valuasi Stok</span>
+            <span class="text-2xl font-black text-emerald-700 font-mono mt-1 block">Rp {{ selected_mat.total_inventory_value|rupiah }}</span>
+            <span class="text-[10px] text-emerald-600 mt-1 block">Nilai persediaan uang</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Total Masuk & Keluar</span>
+            <span class="text-xs font-mono mt-2 block text-emerald-600 font-bold">&darr; IN: {{ total_in|rupiah }} {{ selected_mat.stock_unit }}</span>
+            <span class="text-xs font-mono mt-0.5 block text-rose-600 font-bold">&uarr; OUT: {{ total_out|rupiah }} {{ selected_mat.stock_unit }}</span>
+        </div>
+    </div>
+
+    <!-- Table Kartu Stok -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 text-xs">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">Waktu</th>
+                    <th class="px-4 py-3">No. Referensi / Project</th>
+                    <th class="px-4 py-3 text-center">Tipe</th>
+                    <th class="px-4 py-3 text-right">Satuan Transaksi</th>
+                    <th class="px-4 py-3 text-right">Masuk (IN)</th>
+                    <th class="px-4 py-3 text-right">Keluar (OUT)</th>
+                    <th class="px-4 py-3 text-right">Saldo Stok Dasar</th>
+                    <th class="px-4 py-3">Keterangan</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for m in mutations %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 font-mono text-slate-700 whitespace-nowrap">{{ m.created_at|date:"Y-m-d H:i" }}</td>
+                    <td class="px-4 py-3 font-mono font-medium text-slate-800">
+                        {{ m.reference_no|default:"-" }}
+                        {% if m.project %}
+                        <a href="{% url 'project_detail' m.project.uuid %}" class="block text-[10px] text-indigo-600 hover:underline">
+                            #{{ m.project.code }} - {{ m.project.name }}
+                        </a>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        {% if m.mutation_type == 'IN' %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">IN</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">OUT</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-slate-700">
+                        {{ m.input_qty|rupiah }} {{ m.input_unit }}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono font-bold text-emerald-600">
+                        {% if m.mutation_type == 'IN' %}+{{ m.stock_qty|rupiah }} {{ selected_mat.stock_unit }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono font-bold text-rose-600">
+                        {% if m.mutation_type == 'OUT' %}-{{ m.stock_qty|rupiah }} {{ selected_mat.stock_unit }}{% else %}-{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono font-bold text-slate-900 bg-slate-50">
+                        {{ m.balance_after|rupiah }} {{ selected_mat.stock_unit }}
+                    </td>
+                    <td class="px-4 py-3 text-slate-500">{{ m.notes|default:"-" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="px-4 py-8 text-center text-slate-400">Belum ada transaksi mutasi stok pada bahan baku ini.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

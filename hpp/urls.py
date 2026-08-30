@@ -1,7 +1,9 @@
-﻿from django.urls import path
+from django.urls import path
 from . import views
 from . import views_realization
 from . import views_customer
+from . import views_raw_material
+from . import views_unit
 
 urlpatterns = [
     # Project
@@ -10,11 +12,29 @@ urlpatterns = [
     path("projects/<uuid:uuid>/", views.project_detail, name="project_detail"),
     path("projects/<uuid:uuid>/update/", views.project_update, name="project_update"),
     
+    # Master Satuan (Unit Master)
+    path("units/", views_unit.unit_list, name="unit_list"),
+    path("units/new/", views_unit.unit_create, name="unit_create"),
+    path("units/<uuid:uuid>/update/", views_unit.unit_update, name="unit_update"),
+    path("units/<uuid:uuid>/delete/", views_unit.unit_delete, name="unit_delete"),
+
     # Master Customer
     path("customers/", views_customer.customer_list, name="customer_list"),
     path("customers/new/", views_customer.customer_create, name="customer_create"),
     path("customers/<uuid:uuid>/update/", views_customer.customer_update, name="customer_update"),
     path("customers/<uuid:uuid>/delete/", views_customer.customer_delete, name="customer_delete"),
+
+    # Bahan Baku (Raw Material) & Multi-Satuan
+    path("raw-materials/", views_raw_material.raw_material_list, name="raw_material_list"),
+    path("raw-materials/new/", views_raw_material.raw_material_create, name="raw_material_create"),
+    path("raw-materials/<uuid:uuid>/update/", views_raw_material.raw_material_update, name="raw_material_update"),
+    path("raw-materials/<uuid:uuid>/delete/", views_raw_material.raw_material_delete, name="raw_material_delete"),
+    path("raw-materials/<uuid:material_uuid>/conversions/add/", views_raw_material.raw_material_conversion_add, name="raw_material_conversion_add"),
+    path("raw-materials/conversions/<uuid:uuid>/delete/", views_raw_material.raw_material_conversion_delete, name="raw_material_conversion_delete"),
+    path("raw-materials/mutations/", views_raw_material.raw_material_stock_mutation_list, name="raw_material_stock_mutation_list"),
+    path("raw-materials/mutations/new/", views_raw_material.raw_material_mutation_create, name="raw_material_mutation_create"),
+    path("raw-materials/cards/", views_raw_material.raw_material_stock_card_index, name="raw_material_stock_card_index"),
+    path("raw-materials/<uuid:uuid>/card/", views_raw_material.raw_material_stock_card, name="raw_material_stock_card"),
 
     # Realisasi Project Bertahap
     path("projects/realizations/", views_realization.project_realization_list, name="project_realization_list"),
@@ -48,7 +68,7 @@ urlpatterns = [
     path("project-fg/<uuid:uuid>/update/", views.project_fg_update, name="project_fg_update"),
     path("project-fg/<uuid:uuid>/delete/", views.project_fg_delete, name="project_fg_delete"),
 
-    # Stock Management & Kartu Stock
+    # Stock Management & Kartu Stock (Barang Jadi)
     path("stock/", views.stock_report, name="stock_report"),
     path("stock/new/", views.finished_good_create, name="finished_good_create"),
     path("stock/add/", views.finished_good_form_view, name="finished_good_form_view"),

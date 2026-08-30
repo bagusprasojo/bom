@@ -487,7 +487,17 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
-                        <input type="text" name="unit" x-model="unitInput" class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <select name="unit" x-model="unitInput" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
+                            {% for u in unit_materials %}
+                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% empty %}
+                            <option value="pcs">Pieces (pcs)</option>
+                            <option value="batang">Batang (batang)</option>
+                            <option value="lembar">Lembar (lembar)</option>
+                            <option value="kg">Kilogram (kg)</option>
+                            <option value="meter">Meter (meter)</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
 
@@ -546,7 +556,17 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
-                        <input type="text" name="unit" x-model="currentBom.unit" class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <select name="unit" x-model="currentBom.unit" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
+                            {% for u in unit_materials %}
+                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% empty %}
+                            <option value="pcs">Pieces (pcs)</option>
+                            <option value="batang">Batang (batang)</option>
+                            <option value="lembar">Lembar (lembar)</option>
+                            <option value="kg">Kilogram (kg)</option>
+                            <option value="meter">Meter (meter)</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
 
@@ -619,7 +639,17 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
-                        <input type="text" name="unit" x-model="unitInput" class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <select name="unit" x-model="unitInput" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
+                            {% for u in unit_labors %}
+                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% empty %}
+                            <option value="jam">Jam (jam)</option>
+                            <option value="hari">Hari (hari)</option>
+                            <option value="mandays">Mandays (mandays)</option>
+                            <option value="titik">Titik (titik)</option>
+                            <option value="bulan">Bulan (bulan)</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
 
@@ -666,7 +696,17 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
-                        <input type="text" name="unit" x-model="currentLabor.unit" class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <select name="unit" x-model="currentLabor.unit" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
+                            {% for u in unit_labors %}
+                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% empty %}
+                            <option value="jam">Jam (jam)</option>
+                            <option value="hari">Hari (hari)</option>
+                            <option value="mandays">Mandays (mandays)</option>
+                            <option value="titik">Titik (titik)</option>
+                            <option value="bulan">Bulan (bulan)</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
 

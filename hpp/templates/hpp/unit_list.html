@@ -1,0 +1,293 @@
+{% extends 'hpp/base.html' %}
+{% load custom_filters %}
+
+{% block title %}Master Satuan ? Sistem HPP{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{
+    createModal: false,
+    editModal: false,
+    editData: {
+        uuid: '',
+        code: '',
+        name: '',
+        category: 'raw_material',
+        description: '',
+        is_active: true
+    },
+    openEdit(u) {
+        this.editData = { ...u };
+        this.editModal = true;
+    }
+}">
+
+    <!-- Flash Messages -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-4 rounded-xl text-sm font-semibold flex items-center justify-between {% if message.tags == 'error' %}bg-rose-50 border border-rose-200 text-rose-800{% else %}bg-emerald-50 border border-emerald-200 text-emerald-800{% endif %}">
+            <span>{{ message }}</span>
+            <button @click="$el.parentElement.remove()" class="text-xs underline hover:opacity-80">Tutup</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs uppercase tracking-wider font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-md border border-violet-200">Katalog Sistem</span>
+                <span class="text-xs text-slate-400">&bull;</span>
+                <span class="text-xs font-semibold text-slate-500">Multi-Kategori Satuan</span>
+            </div>
+            <h1 class="text-2xl font-black text-slate-900 mt-1">Master Satuan</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Standarisasi satuan untuk Bahan Baku, Barang Jadi, Tenaga Kerja, dan Overhead.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button @click="createModal = true" class="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm shadow-violet-200 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>Tambah Satuan</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Category Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <a href="?category=raw_material" class="p-4 rounded-xl border transition {% if category_filter == 'raw_material' %}bg-sky-50 border-sky-300 ring-2 ring-sky-400{% else %}bg-white border-slate-200 hover:border-sky-300{% endif %}">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-sky-700">Bahan Baku</span>
+                <span class="text-xs bg-sky-100 text-sky-800 font-bold px-2 py-0.5 rounded-full">{{ stats.raw_material }}</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">kg, batang, lembar, roll, liter, m2...</p>
+        </a>
+
+        <a href="?category=finished_good" class="p-4 rounded-xl border transition {% if category_filter == 'finished_good' %}bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400{% else %}bg-white border-slate-200 hover:border-emerald-300{% endif %}">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">Barang Jadi</span>
+                <span class="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">{{ stats.finished_good }}</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">unit, set, pcs, box, panel, pack...</p>
+        </a>
+
+        <a href="?category=labor" class="p-4 rounded-xl border transition {% if category_filter == 'labor' %}bg-amber-50 border-amber-300 ring-2 ring-amber-400{% else %}bg-white border-slate-200 hover:border-amber-300{% endif %}">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-amber-700">Tenaga Kerja</span>
+                <span class="text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">{{ stats.labor }}</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">jam, hari, mandays, bulan, titik...</p>
+        </a>
+
+        <a href="?category=overhead" class="p-4 rounded-xl border transition {% if category_filter == 'overhead' %}bg-purple-50 border-purple-300 ring-2 ring-purple-400{% else %}bg-white border-slate-200 hover:border-purple-300{% endif %}">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-purple-700">Overhead / Biaya</span>
+                <span class="text-xs bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full">{{ stats.overhead }}</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">paket, ls, trip, kegiatan, bulan...</p>
+        </a>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <a href="{% url 'unit_list' %}" class="px-3 py-1.5 rounded-lg text-xs font-bold {% if not category_filter %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                Semua ({{ stats.total }})
+            </a>
+            <a href="?category=raw_material" class="px-3 py-1.5 rounded-lg text-xs font-bold {% if category_filter == 'raw_material' %}bg-sky-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                Bahan Baku
+            </a>
+            <a href="?category=finished_good" class="px-3 py-1.5 rounded-lg text-xs font-bold {% if category_filter == 'finished_good' %}bg-emerald-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                Barang Jadi
+            </a>
+            <a href="?category=labor" class="px-3 py-1.5 rounded-lg text-xs font-bold {% if category_filter == 'labor' %}bg-amber-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                Tenaga Kerja
+            </a>
+            <a href="?category=overhead" class="px-3 py-1.5 rounded-lg text-xs font-bold {% if category_filter == 'overhead' %}bg-purple-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                Overhead
+            </a>
+        </div>
+
+        <form method="GET" class="flex items-center gap-2 w-full md:w-80">
+            {% if category_filter %}<input type="hidden" name="category" value="{{ category_filter }}">{% endif %}
+            <div class="relative w-full">
+                <input type="text" name="q" value="{{ search }}" placeholder="Cari kode atau nama satuan..." class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-violet-500 focus:bg-white">
+                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+            {% if search %}
+            <a href="{% url 'unit_list' %}{% if category_filter %}?category={{ category_filter }}{% endif %}" class="p-1.5 text-slate-400 hover:text-slate-600 text-xs">Reset</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Units Table -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                        <th class="py-3.5 px-4 w-12 text-center">No</th>
+                        <th class="py-3.5 px-4 w-28">Kode</th>
+                        <th class="py-3.5 px-4">Nama Satuan</th>
+                        <th class="py-3.5 px-4 w-36">Kategori</th>
+                        <th class="py-3.5 px-4">Keterangan</th>
+                        <th class="py-3.5 px-4 w-24 text-center">Status</th>
+                        <th class="py-3.5 px-4 w-28 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                    {% for u in units %}
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <td class="py-3 px-4 text-center text-slate-400">{{ forloop.counter }}</td>
+                        <td class="py-3 px-4">
+                            <span class="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{{ u.code }}</span>
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="font-bold text-slate-900 text-sm">{{ u.name }}</span>
+                        </td>
+                        <td class="py-3 px-4">
+                            {% if u.category == 'raw_material' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">Bahan Baku</span>
+                            {% elif u.category == 'finished_good' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Barang Jadi</span>
+                            {% elif u.category == 'labor' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Tenaga Kerja</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">Overhead</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-slate-500">
+                            {{ u.description|default:"-" }}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            {% if u.is_active %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">Aktif</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">Nonaktif</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <div class="inline-flex items-center gap-1.5">
+                                <button @click="openEdit({
+                                    uuid: '{{ u.uuid }}',
+                                    code: '{{ u.code }}',
+                                    name: '{{ u.name|escapejs }}',
+                                    category: '{{ u.category }}',
+                                    description: '{{ u.description|escapejs }}',
+                                    is_active: {{ u.is_active|yesno:'true,false' }}
+                                })" class="p-1 text-slate-500 hover:text-violet-600 rounded hover:bg-slate-100" title="Edit Satuan">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                </button>
+                                
+                                <form method="POST" action="{% url 'unit_delete' u.uuid %}" onsubmit="return confirm('Yakin ingin menghapus satuan {{ u.name }}?');" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100" title="Hapus Satuan">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-400">
+                            <svg class="w-12 h-12 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                            <p class="text-sm font-semibold">Belum ada data satuan</p>
+                            <p class="text-xs text-slate-400 mt-1">Klik Tambah Satuan untuk mendaftarkan master satuan baru.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MODAL CREATE UNIT -->
+    <div x-show="createModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200" @click.outside="createModal = false">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="font-bold text-slate-900 text-base">Tambah Master Satuan</h3>
+                <button @click="createModal = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'unit_create' %}" class="mt-4 space-y-4 text-xs">
+                {% csrf_token %}
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Kategori Satuan <span class="text-rose-500">*</span></label>
+                    <select name="category" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:border-violet-500">
+                        <option value="raw_material" {% if category_filter == 'raw_material' %}selected{% endif %}>Bahan Baku (kg, batang, m, lembar, dll)</option>
+                        <option value="finished_good" {% if category_filter == 'finished_good' %}selected{% endif %}>Barang Jadi (unit, set, pcs, panel, dll)</option>
+                        <option value="labor" {% if category_filter == 'labor' %}selected{% endif %}>Tenaga Kerja (jam, hari, mandays, titik, dll)</option>
+                        <option value="overhead" {% if category_filter == 'overhead' %}selected{% endif %}>Overhead / Biaya Lain (paket, ls, trip, dll)</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Kode Simbol <span class="text-rose-500">*</span></label>
+                        <input type="text" name="code" required placeholder="Contoh: kg, pcs, jam" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono uppercase focus:outline-none focus:border-violet-500">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Nama Satuan <span class="text-rose-500">*</span></label>
+                        <input type="text" name="name" required placeholder="Contoh: Kilogram, Pieces, Jam Kerja" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-violet-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Keterangan (Opsional)</label>
+                    <input type="text" name="description" placeholder="Catatan penggunaan..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-violet-500">
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" name="is_active" id="create_active" checked class="w-4 h-4 text-violet-600 rounded">
+                    <label for="create_active" class="text-xs font-semibold text-slate-700">Satuan Aktif & Muncul di Pilihan Dropdown</label>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                    <button type="button" @click="createModal = false" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-violet-600 text-white font-bold hover:bg-violet-700">Simpan Satuan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT UNIT -->
+    <div x-show="editModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200" @click.outside="editModal = false">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="font-bold text-slate-900 text-base">Edit Master Satuan</h3>
+                <button @click="editModal = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form method="POST" :action="'/units/' + editData.uuid + '/update/'" class="mt-4 space-y-4 text-xs">
+                {% csrf_token %}
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Kategori Satuan <span class="text-rose-500">*</span></label>
+                    <select name="category" x-model="editData.category" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:border-violet-500">
+                        <option value="raw_material">Bahan Baku (kg, batang, m, lembar, dll)</option>
+                        <option value="finished_good">Barang Jadi (unit, set, pcs, panel, dll)</option>
+                        <option value="labor">Tenaga Kerja (jam, hari, mandays, titik, dll)</option>
+                        <option value="overhead">Overhead / Biaya Lain (paket, ls, trip, dll)</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Kode Simbol <span class="text-rose-500">*</span></label>
+                        <input type="text" name="code" x-model="editData.code" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono uppercase focus:outline-none focus:border-violet-500">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Nama Satuan <span class="text-rose-500">*</span></label>
+                        <input type="text" name="name" x-model="editData.name" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-violet-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Keterangan (Opsional)</label>
+                    <input type="text" name="description" x-model="editData.description" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-violet-500">
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" name="is_active" id="edit_active" :checked="editData.is_active" class="w-4 h-4 text-violet-600 rounded">
+                    <label for="edit_active" class="text-xs font-semibold text-slate-700">Satuan Aktif & Muncul di Pilihan Dropdown</label>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                    <button type="button" @click="editModal = false" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-violet-600 text-white font-bold hover:bg-violet-700">Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

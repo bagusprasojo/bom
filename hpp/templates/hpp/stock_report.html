@@ -143,7 +143,16 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan *</label>
-                        <input type="text" name="unit" x-model="currentFg.unit" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <select name="unit" x-model="currentFg.unit" required class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
+                            {% for u in unit_fgs %}
+                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% empty %}
+                            <option value="unit">Unit (unit)</option>
+                            <option value="set">Set (set)</option>
+                            <option value="pcs">Pieces (pcs)</option>
+                            <option value="box">Box (box)</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
                 <div>

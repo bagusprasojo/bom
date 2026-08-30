@@ -3,9 +3,10 @@ from django.contrib import messages
 from decimal import Decimal
 from django.db.models import Q
 from .models import (
+    UnitMaster,
     Project, BOMItem, ProjectLabor, ProjectOverhead, FinishedGood,
     ProjectFinishedGood, BOMItemRealization, LaborRealization,
-    FinishedGoodRealization, OverheadRealization
+    FinishedGoodRealization, OverheadRealization, RawMaterial
 )
 
 def project_realization_list(request):
@@ -33,8 +34,9 @@ def project_realization_detail(request, uuid):
     overhead_items = project.overhead_items.all()
 
     master_finished_goods = FinishedGood.objects.all().order_by("name")
+    master_raw_materials = RawMaterial.objects.all().prefetch_related("conversions").order_by("name")
 
-    bom_realizations = project.bom_realizations.all().select_related("bom_item")
+    bom_realizations = project.bom_realizations.all().select_related("bom_item", "raw_material")
     labor_realizations = project.labor_realizations.all().select_related("project_labor")
     fg_realizations = project.finished_good_realizations.all().select_related("project_fg", "finished_good")
     overhead_realizations = project.overhead_realizations.all().select_related("project_overhead")
@@ -46,6 +48,7 @@ def project_realization_detail(request, uuid):
         "fg_items": fg_items,
         "overhead_items": overhead_items,
         "master_finished_goods": master_finished_goods,
+        "master_raw_materials": master_raw_materials,
         "bom_realizations": bom_realizations,
         "labor_realizations": labor_realizations,
         "fg_realizations": fg_realizations,
@@ -56,6 +59,7 @@ def realization_bom_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
         bom_item_uuid = request.POST.get("bom_item_uuid", "").strip()
+        raw_material_uuid = request.POST.get("raw_material_uuid", "").strip()
         date = request.POST.get("date")
         item_name = request.POST.get("item_name", "").strip()
         unit = request.POST.get("unit", "pcs").strip()
@@ -65,11 +69,28 @@ def realization_bom_add(request, project_uuid):
         notes = request.POST.get("notes", "").strip()
 
         bom_item = None
+        raw_material = None
+
         if bom_item_uuid:
             bom_item = BOMItem.objects.filter(uuid=bom_item_uuid, project=project).first()
             if bom_item and not item_name:
                 item_name = bom_item.name
-                unit = bom_item.unit
+                if not unit:
+                    unit = bom_item.unit
+
+        if raw_material_uuid:
+            raw_material = RawMaterial.objects.filter(uuid=raw_material_uuid).first()
+            if raw_material:
+                if not item_name:
+                    item_name = raw_material.name
+                if not unit:
+                    unit = raw_material.stock_unit
+                if unit_cost == 0:
+                    unit_cost = raw_material.last_purchase_price
+
+        if not item_name:
+            messages.error(request, "Nama material harus diisi.")
+            return redirect("project_realization_detail", uuid=project.uuid)
 
         if qty <= 0:
             messages.error(request, "Quantity realisasi material harus lebih besar dari 0.")
@@ -78,6 +99,7 @@ def realization_bom_add(request, project_uuid):
         BOMItemRealization.objects.create(
             project=project,
             bom_item=bom_item,
+            raw_material=raw_material,
             date=date,
             item_name=item_name,
             unit=unit,
@@ -86,14 +108,14 @@ def realization_bom_add(request, project_uuid):
             is_substitute=is_substitute,
             notes=notes,
         )
-        messages.success(request, f"Realisasi material '{item_name}' ({qty} {unit}) berhasil disimpan.")
+        messages.success(request, f"Realisasi material '{item_name}' ({qty} {unit}) berhasil disimpan & stok diperbarui.")
     return redirect("project_realization_detail", uuid=project.uuid)
 
 def realization_bom_delete(request, uuid):
     realization = get_object_or_404(BOMItemRealization, uuid=uuid)
     project_uuid = realization.project.uuid
     realization.delete()
-    messages.success(request, "Log realisasi material berhasil dihapus.")
+    messages.success(request, "Log realisasi material berhasil dibatalkan dan stok dikembalikan.")
     return redirect("project_realization_detail", uuid=project_uuid)
 
 def realization_labor_add(request, project_uuid):

@@ -1,4 +1,4 @@
-﻿{% extends "hpp/base.html" %}
+{% extends "hpp/base.html" %}
 {% load custom_filters %}
 
 {% block title %}Realisasi: {{ project.name }} - HPP & Manufaktur{% endblock %}
@@ -433,10 +433,30 @@
                             isMaterialSubstitute = false;
                         }
                     " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                        <option value="">-- [Material Pengganti / Tidak Ada di BOM] --</option>
+                        <option value="">-- [Pilih dari Item BOM Terencana] --</option>
                         {% for b in bom_items %}
                         <option value="{{ b.uuid }}" data-name="{{ b.name }}" data-unit="{{ b.unit }}" data-cost="{{ b.est_unit_cost }}">
                             {{ b.name }} (Est: {{ b.est_qty|rupiah }} {{ b.unit }} @ {{ b.est_unit_cost|rupiah }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div x-show="!selectedBomItem">
+                    <label class="block font-semibold text-slate-700 mb-1">Atau Pilih dari Master Bahan Baku Gudang</label>
+                    <select name="raw_material_uuid" @change="
+                        let opt = $event.target.selectedOptions[0];
+                        if (opt && opt.value) {
+                            materialName = opt.getAttribute('data-name') || '';
+                            materialUnit = opt.getAttribute('data-unit') || 'pcs';
+                            materialCost = opt.getAttribute('data-cost') || 0;
+                            isMaterialSubstitute = true;
+                        }
+                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <option value="">-- [Pilih Bahan Baku Gudang / Ketik Manual] --</option>
+                        {% for rm in master_raw_materials %}
+                        <option value="{{ rm.uuid }}" data-name="{{ rm.name }}" data-unit="{{ rm.stock_unit }}" data-cost="{{ rm.last_purchase_price }}">
+                            [{{ rm.code }}] {{ rm.name }} (Stok: {{ rm.current_stock|rupiah }} {{ rm.stock_unit }} @ Rp {{ rm.last_purchase_price|rupiah }})
                         </option>
                         {% endfor %}
                     </select>

@@ -3,6 +3,88 @@ from decimal import Decimal
 import uuid
 
 
+
+class RawMaterial(models.Model):
+    """
+    Master Data Bahan Baku (Raw Material)
+    Stock dikelola dalam satuan dasar (stock_unit).
+    Valuasi keuangan stok menggunakan harga beli terakhir (last_purchase_price).
+    """
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=200, unique=True)
+    category = models.CharField(max_length=100, blank=True, default="Umum")
+    stock_unit = models.CharField(max_length=50, default="pcs")  # Satuan dasar persediaan
+    current_stock = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    last_purchase_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # Harga beli terakhir per stock_unit
+    minimum_stock = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    @property
+    def total_inventory_value(self):
+        return self.current_stock * self.last_purchase_price
+
+    def __str__(self):
+        return f"[{self.code}] {self.name} (Stock: {self.current_stock} {self.stock_unit})"
+
+
+class RawMaterialUnitConversion(models.Model):
+    """
+    Multi-Satuan & Rasio Konversi Bahan Baku
+    Contoh: 1 DUS = 100 PCS (conversion_factor = 100)
+    1 LEMBAR = 2.88 M2 (conversion_factor = 2.88)
+    """
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    raw_material = models.ForeignKey(RawMaterial, on_delete=models.CASCADE, related_name="conversions")
+    unit_name = models.CharField(max_length=50)  # Satuan alternatif
+    conversion_factor = models.DecimalField(max_digits=12, decimal_places=4, default=1)  # 1 unit_name = conversion_factor stock_unit
+    notes = models.CharField(max_length=200, blank=True, default="")
+
+    class Meta:
+        unique_together = ("raw_material", "unit_name")
+        ordering = ["unit_name"]
+
+    def __str__(self):
+        return f"1 {self.unit_name} = {self.conversion_factor} {self.raw_material.stock_unit}"
+
+
+class RawMaterialStockMutation(models.Model):
+    """
+    Kartu Stok & Riwayat Mutasi Bahan Baku (In / Out)
+    """
+    MUTATION_TYPES = [
+        ("IN", "Stock Masuk (In)"),
+        ("OUT", "Stock Keluar (Out)"),
+    ]
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    raw_material = models.ForeignKey(RawMaterial, on_delete=models.CASCADE, related_name="mutations")
+    project = models.ForeignKey('Project', on_delete=models.SET_NULL, null=True, blank=True, related_name="material_mutations")
+    mutation_type = models.CharField(max_length=5, choices=MUTATION_TYPES)
+    
+    input_qty = models.DecimalField(max_digits=15, decimal_places=4)  # Jumlah satuan input
+    input_unit = models.CharField(max_length=50)  # Satuan input
+    stock_qty = models.DecimalField(max_digits=15, decimal_places=4)  # Jumlah dalam satuan dasar
+    
+    unit_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # Harga per input_unit saat transaksi
+    total_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    balance_after = models.DecimalField(max_digits=15, decimal_places=4)  # Sisa stok dasar
+    
+    reference_no = models.CharField(max_length=100, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.mutation_type} {self.input_qty} {self.input_unit} ({self.stock_qty} {self.raw_material.stock_unit}) - {self.raw_material.name}"
+
 class MaterialMaster(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     code = models.CharField(max_length=50, blank=True, null=True, unique=True)
@@ -354,16 +436,22 @@ class FinishedGoodStockMutation(models.Model):
 # ==========================================
 
 class BOMItemRealization(models.Model):
+    """
+    Realisasi pemakaian Material / Bahan Baku pada project.
+    Jika terhubung dengan RawMaterial, langsung memotong stock dasar dan update harga beli terakhir.
+    """
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="bom_realizations")
     bom_item = models.ForeignKey(BOMItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="realizations")
+    raw_material = models.ForeignKey(RawMaterial, on_delete=models.SET_NULL, null=True, blank=True, related_name="realizations")
     date = models.DateField()
     item_name = models.CharField(max_length=200)
     unit = models.CharField(max_length=50, default="pcs")
-    qty = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    qty = models.DecimalField(max_digits=15, decimal_places=4, default=0)
     unit_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     is_substitute = models.BooleanField(default=False)
+    mutation = models.ForeignKey(RawMaterialStockMutation, on_delete=models.SET_NULL, null=True, blank=True)
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -371,8 +459,79 @@ class BOMItemRealization(models.Model):
         ordering = ["-date", "-created_at"]
 
     def save(self, *args, **kwargs):
-        self.total_cost = self.qty * self.unit_cost
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            self.total_cost = self.qty * self.unit_cost
+            is_new = self.pk is None
+
+            # Cek dan hubungkan ke RawMaterial jika ada nama yang cocok
+            if not self.raw_material and self.item_name:
+                rm = RawMaterial.objects.filter(name__iexact=self.item_name.strip()).first()
+                if rm:
+                    self.raw_material = rm
+
+            if is_new and self.raw_material:
+                rm = self.raw_material
+                factor = Decimal(1)
+                if self.unit.lower() != rm.stock_unit.lower():
+                    conv = rm.conversions.filter(unit_name__iexact=self.unit.strip()).first()
+                    if conv:
+                        factor = conv.conversion_factor
+
+                base_qty = self.qty * factor
+                rm.current_stock -= base_qty
+
+                # Update harga terakhir per stock_unit jika diinput
+                if self.unit_cost > 0:
+                    unit_price_base = self.unit_cost / factor
+                    rm.last_purchase_price = unit_price_base
+
+                rm.save()
+
+                mut = RawMaterialStockMutation.objects.create(
+                    raw_material=rm,
+                    project=self.project,
+                    mutation_type="OUT",
+                    input_qty=self.qty,
+                    input_unit=self.unit,
+                    stock_qty=base_qty,
+                    unit_price=self.unit_cost,
+                    total_price=self.total_cost,
+                    balance_after=rm.current_stock,
+                    reference_no=f"REAL-{self.project.code}",
+                    notes=f"Realisasi material project {self.project.code} ({self.project.name}) - {self.notes}".strip()
+                )
+                self.mutation = mut
+
+            super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        with transaction.atomic():
+            if self.raw_material and self.mutation:
+                rm = self.raw_material
+                factor = Decimal(1)
+                if self.unit.lower() != rm.stock_unit.lower():
+                    conv = rm.conversions.filter(unit_name__iexact=self.unit.strip()).first()
+                    if conv:
+                        factor = conv.conversion_factor
+
+                base_qty = self.qty * factor
+                rm.current_stock += base_qty
+                rm.save()
+
+                RawMaterialStockMutation.objects.create(
+                    raw_material=rm,
+                    project=self.project,
+                    mutation_type="IN",
+                    input_qty=self.qty,
+                    input_unit=self.unit,
+                    stock_qty=base_qty,
+                    unit_price=self.unit_cost,
+                    total_price=self.total_cost,
+                    balance_after=rm.current_stock,
+                    reference_no=f"CANCEL-REAL-{self.project.code}",
+                    notes=f"Pembatalan realisasi material project {self.project.code}"
+                )
+            super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"{self.date} - {self.item_name} ({self.qty} {self.unit})"
@@ -581,3 +740,28 @@ class EmployeeWorkLog(models.Model):
 
     def __str__(self):
         return f"{self.date} - {self.employee.name}: {self.task_description[:30]}"
+
+
+class UnitMaster(models.Model):
+    CATEGORY_CHOICES = [
+        ("raw_material", "Bahan Baku"),
+        ("finished_good", "Barang Jadi"),
+        ("labor", "Tenaga Kerja"),
+        ("overhead", "Overhead / Biaya Lain"),
+    ]
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    code = models.CharField(max_length=30)
+    name = models.CharField(max_length=100)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default="raw_material", db_index=True)
+    description = models.CharField(max_length=200, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["category", "name"]
+        unique_together = ("code", "category")
+
+    def __str__(self):
+        return f"{self.name} ({self.code}) - {self.get_category_display()}"

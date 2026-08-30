@@ -19,6 +19,7 @@
 <body class="bg-slate-100 text-slate-800 antialiased font-sans" x-data="{ 
     mobileSidebarOpen: false,
     projectTreeOpen: true,
+    materialTreeOpen: true,
     inventoryTreeOpen: true,
     hrTreeOpen: true
 }">
@@ -105,6 +106,31 @@
                     </div>
                 </div>
 
+                                <!-- TREE: BAHAN BAKU -->
+                <div>
+                    <button @click="materialTreeOpen = !materialTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                            <span class="font-bold uppercase tracking-wider text-[11px] text-slate-200">Bahan Baku</span>
+                        </div>
+                        <svg :class="materialTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                    <div x-show="materialTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
+                        <a href="{% url 'raw_material_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/raw-materials/' %}text-teal-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Stok Bahan Baku</span>
+                        </a>
+                        <a href="{% url 'raw_material_stock_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/raw-materials/mutations/' in request.path %}text-teal-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Mutasi Bahan Baku</span>
+                        </a>
+                        <a href="{% url 'raw_material_stock_card_index' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/raw-materials/cards/' in request.path or '/raw-materials/' in request.path and '/card/' in request.path %}text-teal-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Kartu Stok Bahan</span>
+                        </a>
+                    </div>
+                </div>
+
                 <!-- TREE 2: BARANG JADI -->
                 <div>
                     <button @click="inventoryTreeOpen = !inventoryTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
@@ -159,13 +185,18 @@
                     </div>
                 </div>
 
-                <!-- Django Admin Shortcut -->
-                <div class="pt-4 border-t border-slate-800">
-                    <a href="/admin/" target="_blank" class="flex items-center justify-between px-2 py-1.5 text-slate-400 hover:text-indigo-300 text-xs">
-                        <span>Django Admin Panel</span>
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                <!-- MASTER SATUAN (DI BAWAH SDM) -->
+                <div class="pt-2 border-t border-slate-800">
+                    <a href="/units/" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition {% if '/units/' in request.path %}bg-slate-800 text-violet-400 font-bold border-l-4 border-violet-500{% endif %}">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                            <span class="font-bold uppercase tracking-wider text-[11px]">Master Satuan</span>
+                        </div>
+                        <span class="text-[10px] bg-violet-900/60 text-violet-300 font-bold px-1.5 py-0.5 rounded">4 Kat</span>
                     </a>
                 </div>
+
+
             </nav>
 
             <!-- User / System Status Footer in Sidebar -->
