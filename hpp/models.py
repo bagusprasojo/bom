@@ -113,12 +113,21 @@ class FinishedGood(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     sku = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=200, unique=True)
+    category = models.CharField(max_length=100, blank=True, default="Umum")
     unit = models.CharField(max_length=50, default="unit")
     standard_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     current_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    minimum_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    @property
+    def total_inventory_value(self):
+        return self.current_stock * self.standard_cost
 
     def __str__(self):
         return f"[{self.sku}] {self.name} (Stock: {self.current_stock} {self.unit})"

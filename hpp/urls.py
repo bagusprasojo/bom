@@ -4,6 +4,7 @@ from . import views_realization
 from . import views_customer
 from . import views_raw_material
 from . import views_unit
+from . import views_finished_good
 
 urlpatterns = [
     # Project
@@ -76,15 +77,30 @@ urlpatterns = [
     path("project-fg/<uuid:uuid>/delete/", views.project_fg_delete, name="project_fg_delete"),
 
     # Stock Management & Kartu Stock (Barang Jadi)
-    path("stock/", views.stock_report, name="stock_report"),
-    path("stock/new/", views.finished_good_create, name="finished_good_create"),
-    path("stock/add/", views.finished_good_form_view, name="finished_good_form_view"),
-    path("stock/mutations/", views.stock_mutation_list, name="stock_mutation_list"),
-    path("stock/mutations/new/", views.stock_mutation_general_create, name="stock_mutation_general_create"),
-    path("stock/cards/", views.stock_card_index, name="stock_card_index"),
-    path("stock/<uuid:uuid>/update/", views.finished_good_update, name="finished_good_update"),
-    path("stock/<uuid:uuid>/delete/", views.finished_good_delete, name="finished_good_delete"),
-    path("stock/<uuid:uuid>/card/", views.stock_card, name="stock_card"),
+    path("finished-goods/", views_finished_good.finished_good_list, name="finished_good_list"),
+    path("finished-goods/export/", views_finished_good.finished_good_export_excel, name="finished_good_export_excel"),
+    path("finished-goods/new/", views_finished_good.finished_good_create, name="finished_good_create"),
+    path("finished-goods/<uuid:uuid>/update/", views_finished_good.finished_good_update, name="finished_good_update"),
+    path("finished-goods/<uuid:uuid>/delete/", views_finished_good.finished_good_delete, name="finished_good_delete"),
+    path("finished-goods/mutations/", views_finished_good.finished_good_mutation_list, name="finished_good_mutation_list"),
+    path("finished-goods/mutations/export/", views_finished_good.finished_good_mutation_export_excel, name="finished_good_mutation_export_excel"),
+    path("finished-goods/mutations/new/", views_finished_good.finished_good_mutation_create, name="finished_good_mutation_create"),
+    path("finished-goods/cards/", views_finished_good.finished_good_stock_card_index, name="finished_good_stock_card_index"),
+    path("finished-goods/cards/export/", views_finished_good.finished_good_stock_card_export_excel, name="finished_good_stock_card_export_excel"),
+    path("finished-goods/<uuid:uuid>/card/", views_finished_good.finished_good_stock_card, name="finished_good_stock_card"),
+    
+    # Backward compatibility aliases
+    path("stock/", views_finished_good.finished_good_list, name="stock_report"),
+    path("stock/new/", views_finished_good.finished_good_create, name="stock_create_legacy"),
+    path("stock/add/", views_finished_good.finished_good_create, name="finished_good_form_view"),
+    path("stock/mutations/", views_finished_good.finished_good_mutation_list, name="stock_mutation_list"),
+    path("stock/mutations/export/", views_finished_good.finished_good_mutation_export_excel, name="stock_mutation_export_excel"),
+    path("stock/mutations/new/", views_finished_good.finished_good_mutation_create, name="stock_mutation_general_create"),
+    path("stock/cards/", views_finished_good.finished_good_stock_card_index, name="stock_card_index"),
+    path("stock/cards/export/", views_finished_good.finished_good_stock_card_export_excel, name="stock_card_export_excel"),
+    path("stock/<uuid:uuid>/update/", views_finished_good.finished_good_update, name="stock_update_legacy"),
+    path("stock/<uuid:uuid>/delete/", views_finished_good.finished_good_delete, name="stock_delete_legacy"),
+    path("stock/<uuid:uuid>/card/", views_finished_good.finished_good_stock_card, name="stock_card"),
     path("stock/<uuid:uuid>/mutation/", views.stock_mutation_create, name="stock_mutation_create"),
     
     # Export & Print

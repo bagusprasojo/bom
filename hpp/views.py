@@ -394,15 +394,9 @@ def finished_good_create(request):
 
 def stock_card(request, uuid):
     """
-    Kartu Stock per Barang Jadi
+    Kartu Stock per Barang Jadi -> Delegasi ke views_finished_good
     """
-    fg = get_object_or_404(FinishedGood, uuid=uuid)
-    mutations = fg.mutations.all().select_related("project")
-
-    return render(request, "hpp/stock_card.html", {
-        "finished_good": fg,
-        "mutations": mutations,
-    })
+    return views_finished_good.finished_good_stock_card(request, uuid)
 
 
 def stock_mutation_create(request, uuid):
@@ -894,110 +888,23 @@ def work_log_delete(request, uuid):
 # =========================================================================
 # MUTASI BARANG JADI & KARTU STOCK DEDICATED VIEWS
 # =========================================================================
+from . import views_finished_good
+
 def stock_mutation_list(request):
-    """
-    Halaman Menu Mutasi Barang Jadi (Pencatatan Barang Masuk, Rusak, Penyesuaian)
-    """
-    mutations = FinishedGoodStockMutation.objects.all().select_related("finished_good", "project")
-    fg_uuid = request.GET.get("fg", "").strip()
-    mutation_type = request.GET.get("type", "").strip()
-    query = request.GET.get("q", "").strip()
-
-    if fg_uuid:
-        mutations = mutations.filter(finished_good__uuid=fg_uuid)
-    if mutation_type:
-        mutations = mutations.filter(mutation_type=mutation_type)
-    if query:
-        mutations = mutations.filter(
-            Q(reference_no__icontains=query) |
-            Q(notes__icontains=query) |
-            Q(finished_good__name__icontains=query) |
-            Q(finished_good__sku__icontains=query)
-        )
-
-    finished_goods = FinishedGood.objects.all().order_by("name")
-
-    return render(request, "hpp/stock_mutation_list.html", {
-        "mutations": mutations,
-        "finished_goods": finished_goods,
-        "selected_fg": fg_uuid,
-        "selected_type": mutation_type,
-        "query": query,
-    })
+    """Delegasi ke modul views_finished_good"""
+    return views_finished_good.finished_good_mutation_list(request)
 
 
 def stock_mutation_general_create(request):
-    """
-    Input transaksi mutasi barang masuk, barang rusak, atau penyesuaian
-    """
-    if request.method == "POST":
-        fg_uuid = request.POST.get("finished_good_uuid")
-        mutation_type = request.POST.get("mutation_type", "IN")  # IN atau OUT
-        reason_type = request.POST.get("reason_type", "masuk")   # masuk, rusak, koreksi
-        quantity = Decimal(request.POST.get("quantity") or 0)
-        reference_no = request.POST.get("reference_no", "").strip()
-        notes = request.POST.get("notes", "").strip()
-
-        fg = get_object_or_404(FinishedGood, uuid=fg_uuid)
-
-        if quantity <= 0:
-            messages.error(request, "Jumlah mutasi harus lebih besar dari 0.")
-            return redirect("stock_mutation_list")
-
-        # Tentukan arah mutasi
-        if mutation_type == "IN":
-            fg.current_stock += quantity
-            prefix = "[MASUK]"
-        else:
-            if fg.current_stock < quantity:
-                messages.error(request, f"Stock {fg.name} tidak mencukupi (Tersedia: {fg.current_stock} {fg.unit}).")
-                return redirect("stock_mutation_list")
-            fg.current_stock -= quantity
-            prefix = "[RUSAK/OUT]" if reason_type == "rusak" else "[KOREKSI/OUT]"
-
-        fg.save()
-
-        full_notes = f"{prefix} {notes}".strip()
-        FinishedGoodStockMutation.objects.create(
-            finished_good=fg,
-            mutation_type=mutation_type,
-            quantity=quantity,
-            balance_after=fg.current_stock,
-            reference_no=reference_no or f"MUT-{fg.sku}",
-            notes=full_notes
-        )
-        messages.success(request, f"Mutasi stock {fg.name} ({mutation_type} {quantity} {fg.unit}) berhasil dicatat.")
-    return redirect("stock_mutation_list")
+    """Delegasi ke modul views_finished_good"""
+    return views_finished_good.finished_good_mutation_create(request)
 
 
 def stock_card_index(request):
     """
-    Menu Kartu Stock Standalone (dengan filter pemilih barang jadi)
+    Menu Kartu Stock Standalone -> Delegasi ke views_finished_good
     """
-    finished_goods = FinishedGood.objects.all().order_by("name")
-    selected_fg_uuid = request.GET.get("fg", "").strip()
-
-    if selected_fg_uuid:
-        selected_fg = FinishedGood.objects.filter(uuid=selected_fg_uuid).first()
-    else:
-        selected_fg = finished_goods.first()
-
-    mutations = []
-    total_in = 0
-    total_out = 0
-
-    if selected_fg:
-        mutations = selected_fg.mutations.all().select_related("project")
-        total_in = sum(m.quantity for m in mutations if m.mutation_type == "IN")
-        total_out = sum(m.quantity for m in mutations if m.mutation_type == "OUT")
-
-    return render(request, "hpp/stock_card_index.html", {
-        "finished_goods": finished_goods,
-        "selected_fg": selected_fg,
-        "mutations": mutations,
-        "total_in": total_in,
-        "total_out": total_out,
-    })
+    return views_finished_good.finished_good_stock_card_index(request)
 
 
 def finished_good_form_view(request):

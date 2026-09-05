@@ -141,21 +141,17 @@
                         <svg :class="inventoryTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                     </button>
                     <div x-show="inventoryTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
-                        <a href="{% url 'finished_good_form_view' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/stock/add/' %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                        <a href="{% url 'finished_good_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/finished-goods/' or request.path == '/stock/' %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
-                            <span>Tambah Barang Jadi</span>
+                            <span>Daftar Barang Jadi</span>
                         </a>
-                        <a href="{% url 'stock_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/stock/mutations/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                        <a href="{% url 'stock_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/stock/mutations/' in request.path or '/finished-goods/mutations/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Mutasi Barang Jadi</span>
                         </a>
-                        <a href="{% url 'stock_report' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/stock/' %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                        <a href="{% url 'stock_card_index' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/stock/cards/' in request.path or '/finished-goods/cards/' in request.path or '/card/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
-                            <span>Laporan Persediaan</span>
-                        </a>
-                        <a href="{% url 'stock_card_index' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/stock/cards/' in request.path or '/card/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
-                            <span>&bull;</span>
-                            <span>Kartu Stock</span>
+                            <span>Kartu Stok Barang</span>
                         </a>
                     </div>
                 </div>

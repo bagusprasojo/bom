@@ -1,0 +1,417 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Daftar Master Barang Jadi - HPP & Manufaktur{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ 
+    addModalOpen: false, 
+    editModalOpen: false, 
+    editItem: {
+        uuid: '',
+        sku: '',
+        name: '',
+        category: 'Umum',
+        unit: 'unit',
+        standard_cost: 0,
+        minimum_stock: 0,
+        notes: '',
+        has_transactions: false
+    }
+}">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <span>Barang Jadi</span>
+                <span>&rsaquo;</span>
+                <span>Master Produk</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">Master Data Barang Jadi</h1>
+            <p class="text-sm text-slate-500">Katalog produk jadi hasil produksi, monitoring stok on-hand, biaya standar HPP, dan valuasi persediaan.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'finished_good_export_excel' %}?{% if query %}q={{ query }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if low_stock %}low_stock={{ low_stock }}{% endif %}" 
+               class="px-3.5 py-2 bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 transition" 
+               title="Export Seluruh Katalog Barang Jadi ke Excel">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <span>Export Excel</span>
+            </a>
+            <button @click="addModalOpen = true" class="px-3.5 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 shadow flex items-center gap-1.5 transition cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>+ Barang Jadi Baru</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-lg text-xs font-semibold {% if message.tags == 'error' %}bg-rose-100 text-rose-800 border border-rose-200{% else %}bg-emerald-100 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- 3 Kartu Ringkasan KPI Persediaan Barang Jadi -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- KPI 1: Total SKU -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Varian Produk</span>
+                <span class="text-2xl font-bold text-slate-800">{{ total_sku_count }}</span>
+                <span class="text-xs text-slate-500 block">SKU terdaftar di sistem</span>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+            </div>
+        </div>
+
+        <!-- KPI 2: Total Valuasi Persediaan -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Valuasi Persediaan</span>
+                <span class="text-xl font-bold text-emerald-700">Rp {{ total_inventory_value|rupiah }}</span>
+                <span class="text-xs text-slate-500 block">Total {{ total_stock_units|rupiah }} unit stock fisik</span>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+        </div>
+
+        <!-- KPI 3: Stok Kritis / Menipis -->
+        <a href="{% if low_stock == '1' %}{% url 'finished_good_list' %}{% else %}{% url 'finished_good_list' %}?low_stock=1{% endif %}" 
+           class="bg-white p-4 rounded-xl border {% if low_stock == '1' %}border-rose-400 ring-2 ring-rose-300{% else %}border-slate-200{% endif %} shadow-sm flex items-center justify-between hover:border-rose-300 transition group cursor-pointer"
+           title="Klik untuk menyaring barang dengan stok <= batas minimum">
+            <div>
+                <span class="text-xs font-semibold text-slate-400 group-hover:text-rose-600 uppercase tracking-wider block flex items-center gap-1.5">
+                    Stok Rendah / Kritis
+                    {% if low_stock_count > 0 %}
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Perhatian</span>
+                    {% endif %}
+                </span>
+                <span class="text-2xl font-bold {% if low_stock_count > 0 %}text-rose-600{% else %}text-slate-800{% endif %}">{{ low_stock_count }}</span>
+                <span class="text-xs text-slate-500 block">
+                    {% if low_stock == '1' %}
+                    <strong class="text-rose-600">Filter Aktif</strong> (Klik untuk reset)
+                    {% else %}
+                    Stok fisik &le; batas minimum
+                    {% endif %}
+                </span>
+            </div>
+            <div class="w-12 h-12 rounded-xl {% if low_stock_count > 0 %}bg-rose-50 text-rose-600{% else %}bg-slate-50 text-slate-400{% endif %} flex items-center justify-center">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+        </a>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form method="GET" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            <div class="sm:col-span-5">
+                <input type="text" name="q" value="{{ query }}" placeholder="Cari SKU, nama barang jadi, catatan..." class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div class="sm:col-span-3">
+                <select name="category" class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="">-- Semua Kategori --</option>
+                    {% for cat in categories %}
+                    {% if cat %}
+                    <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="sm:col-span-2">
+                <select name="low_stock" class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="">Status: Semua</option>
+                    <option value="1" {% if low_stock == '1' %}selected{% endif %}>Hanya Stok Kritis</option>
+                </select>
+            </div>
+            <div class="sm:col-span-2 flex items-center gap-2">
+                <button type="submit" class="w-full px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-md hover:bg-slate-700 transition cursor-pointer">Filter</button>
+                <a href="{% url 'finished_good_list' %}" class="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-md hover:bg-slate-200 transition">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Table Master Barang Jadi -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 text-xs">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">SKU / Kode</th>
+                    <th class="px-4 py-3">Nama Produk & Kategori</th>
+                    <th class="px-4 py-3 text-right">Standard Cost</th>
+                    <th class="px-4 py-3 text-right">Stok On-Hand</th>
+                    <th class="px-4 py-3 text-right">Batas Min.</th>
+                    <th class="px-4 py-3 text-right">Total Valuasi</th>
+                    <th class="px-4 py-3 text-center">Status</th>
+                    <th class="px-4 py-3 text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for fg in finished_goods %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 font-mono font-bold text-slate-700 whitespace-nowrap">
+                        <span class="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-800">
+                            #{{ fg.sku }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="font-bold text-slate-900 text-xs">{{ fg.name }}</div>
+                        <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                            <span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-medium">{{ fg.category|default:"Umum" }}</span>
+                            {% if fg.notes %}
+                            <span class="truncate max-w-xs">&bull; {{ fg.notes }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-slate-700 whitespace-nowrap">
+                        Rp {{ fg.standard_cost|rupiah }} <span class="text-[10px] text-slate-400">/ {{ fg.unit }}</span>
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono font-bold whitespace-nowrap">
+                        <span class="{% if fg.current_stock <= fg.minimum_stock %}text-rose-600 font-extrabold{% else %}text-slate-800{% endif %}">
+                            {{ fg.current_stock|rupiah }} {{ fg.unit }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-slate-500 whitespace-nowrap">
+                        {{ fg.minimum_stock|rupiah }} {{ fg.unit }}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono font-bold text-emerald-800 whitespace-nowrap">
+                        Rp {{ fg.total_inventory_value|rupiah }}
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        {% if fg.current_stock <= fg.minimum_stock %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200" title="Stok berada di bawah atau sama dengan batas minimum">
+                            KRITIS
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            AMAN
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                        <a href="{% url 'stock_card' fg.uuid %}" class="inline-block text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-100 font-bold transition">
+                            Kartu Stok
+                        </a>
+                        <button type="button" @click="editItem = {
+                            uuid: '{{ fg.uuid }}',
+                            sku: '{{ fg.sku|escapejs }}',
+                            name: '{{ fg.name|escapejs }}',
+                            category: '{{ fg.category|escapejs|default:'Umum' }}',
+                            unit: '{{ fg.unit|escapejs }}',
+                            standard_cost: '{{ fg.standard_cost }}',
+                            minimum_stock: '{{ fg.minimum_stock }}',
+                            notes: '{{ fg.notes|escapejs }}',
+                            has_transactions: {{ fg.has_transactions|yesno:'true,false' }}
+                        }; editModalOpen = true;" class="text-[11px] bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-semibold cursor-pointer transition">
+                            Edit
+                        </button>
+                        {% if not fg.has_transactions %}
+                        <form action="{% url 'finished_good_delete' fg.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus barang jadi {{ fg.name|escapejs }}?')">
+                            {% csrf_token %}
+                            <button type="submit" class="text-[11px] text-rose-600 hover:text-rose-800 font-semibold px-1 cursor-pointer">
+                                Hapus
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-[11px] text-slate-300 cursor-not-allowed px-1" title="Terkunci: Memiliki riwayat mutasi / transaksi project">
+                            Hapus
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                        Belum ada data barang jadi terdaftar. Klik <strong>"+ Barang Jadi Baru"</strong> untuk mendaftarkan produk pertama.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination Navigation -->
+    {% if finished_goods.has_other_pages %}
+    <div class="bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+        <div class="text-slate-500 font-medium">
+            Menampilkan halaman <strong class="text-slate-800">{{ finished_goods.number }}</strong> dari <strong class="text-slate-800">{{ finished_goods.paginator.num_pages }}</strong> (Total {{ finished_goods.paginator.count }} data)
+        </div>
+        <div class="inline-flex items-center gap-1 font-semibold">
+            {% if finished_goods.has_previous %}
+            <a href="?page=1{% if query %}&q={{ query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if low_stock %}&low_stock={{ low_stock }}{% endif %}" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition" title="Halaman Pertama">&laquo;</a>
+            <a href="?page={{ finished_goods.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if low_stock %}&low_stock={{ low_stock }}{% endif %}" class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition">Sebelumnya</a>
+            {% else %}
+            <span class="px-3 py-1.5 rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed">Sebelumnya</span>
+            {% endif %}
+
+            <span class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg font-bold">
+                {{ finished_goods.number }}
+            </span>
+
+            {% if finished_goods.has_next %}
+            <a href="?page={{ finished_goods.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if low_stock %}&low_stock={{ low_stock }}{% endif %}" class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition">Berikutnya</a>
+            <a href="?page={{ finished_goods.paginator.num_pages }}{% if query %}&q={{ query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if low_stock %}&low_stock={{ low_stock }}{% endif %}" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition" title="Halaman Terakhir">&raquo;</a>
+            {% else %}
+            <span class="px-3 py-1.5 rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed">Berikutnya</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- MODAL 1: TAMBAH BARANG JADI BARU -->
+    <div x-show="addModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="addModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-base">Tambah Barang Jadi Baru</h3>
+                    <p class="text-[11px] text-slate-400">Daftarkan produk jadi baru ke dalam master katalog persediaan.</p>
+                </div>
+                <button @click="addModalOpen = false" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+            </div>
+            
+            <form action="{% url 'finished_good_create' %}" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">SKU / Kode (Opsional)</label>
+                        <input type="text" name="sku" placeholder="Otomatis ({{ suggested_sku }})" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kategori Produk</label>
+                        <input type="text" name="category" value="Umum" placeholder="Furniture, Pintu, Interior, dll" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Barang Jadi *</label>
+                    <input type="text" name="name" required placeholder="Contoh: Kursi Kerja Ergonomis Mesh Grey" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan Produk *</label>
+                        <select name="unit" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold bg-white focus:ring-indigo-500 focus:border-indigo-500">
+                            {% for u in unit_fgs %}
+                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% empty %}
+                            <option value="unit">Unit (unit)</option>
+                            <option value="set">Set (set)</option>
+                            <option value="pcs">Pieces (pcs)</option>
+                            <option value="box">Box (box)</option>
+                            <option value="pack">Pack (pack)</option>
+                            <option value="panel">Panel (panel)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Standard Cost / HPP (Rp)</label>
+                        <input type="number" step="0.01" name="standard_cost" value="0" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Stok Awal Fisik</label>
+                        <input type="number" step="0.01" name="initial_stock" value="0" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                        <span class="text-[10px] text-slate-400">Otomatis dicatat sebagai mutasi awal.</span>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Batas Minimum Stok</label>
+                        <input type="number" step="0.01" name="minimum_stock" value="0" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                        <span class="text-[10px] text-slate-400">Peringatan jika stok &le; angka ini.</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan / Spesifikasi Tambahan</label>
+                    <textarea name="notes" rows="2" placeholder="Dimensi, warna, lokasi rak penyimpanan..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="addModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold cursor-pointer">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow cursor-pointer">Simpan Barang Jadi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: EDIT MASTER BARANG JADI -->
+    <div x-show="editModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="editModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-base">Edit Master Barang Jadi</h3>
+                    <p class="text-[11px] text-slate-400">Ubah informasi produk, harga standar, batas stok, atau spesifikasi.</p>
+                </div>
+                <button @click="editModalOpen = false" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+            </div>
+            
+            <form :action="'/finished-goods/' + editItem.uuid + '/update/'" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">SKU / Kode *</label>
+                        <input type="text" name="sku" x-model="editItem.sku" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono font-bold">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kategori Produk</label>
+                        <input type="text" name="category" x-model="editItem.category" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Barang Jadi *</label>
+                    <input type="text" name="name" x-model="editItem.name" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan Produk *</label>
+                        <select name="unit" x-model="editItem.unit" required :disabled="editItem.has_transactions" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold bg-white focus:ring-indigo-500 focus:border-indigo-500" :class="editItem.has_transactions ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''">
+                            {% for u in unit_fgs %}
+                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% empty %}
+                            <option value="unit">Unit (unit)</option>
+                            <option value="set">Set (set)</option>
+                            <option value="pcs">Pieces (pcs)</option>
+                            <option value="box">Box (box)</option>
+                            <option value="pack">Pack (pack)</option>
+                            <option value="panel">Panel (panel)</option>
+                            {% endfor %}
+                        </select>
+                        <template x-if="editItem.has_transactions">
+                            <p class="text-[10px] text-amber-600 mt-1 font-medium">Satuan terkunci karena sudah memiliki riwayat mutasi / transaksi.</p>
+                        </template>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Standard Cost / HPP (Rp)</label>
+                        <input type="number" step="0.01" name="standard_cost" x-model="editItem.standard_cost" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Batas Minimum Stok</label>
+                    <input type="number" step="0.01" name="minimum_stock" x-model="editItem.minimum_stock" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan / Spesifikasi Tambahan</label>
+                    <textarea name="notes" x-model="editItem.notes" rows="2" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="editModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold cursor-pointer">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow cursor-pointer">Update Barang Jadi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

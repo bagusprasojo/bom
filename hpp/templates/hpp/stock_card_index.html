@@ -1,108 +1,420 @@
 {% extends "hpp/base.html" %}
 {% load custom_filters %}
 
-{% block title %}Kartu Stock Barang Jadi - HPP & BOM{% endblock %}
+{% block title %}Kartu Stok: {% if selected_fg %}{{ selected_fg.name }}{% else %}Barang Jadi{% endif %} - HPP & Manufaktur{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+<style>
+@media print {
+    /* Sembunyikan elemen non-cetak */
+    nav, aside, header, .print\:hidden, [x-data] form, .pagination-container, footer {
+        display: none !important;
+    }
+    body, main {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        font-size: 10px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    .print\:block {
+        display: block !important;
+    }
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 9.5px !important;
+    }
+    th, td {
+        border: 1px solid #94a3b8 !important;
+        padding: 4px 6px !important;
+    }
+    thead th {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+    }
+    .shadow-sm, .shadow {
+        box-shadow: none !important;
+        border-color: #cbd5e1 !important;
+    }
+}
+</style>
+
+<div class="space-y-6" x-data="stockCardApp()">
+    <!-- Header Print Only -->
+    <div class="hidden print:block border-b-2 border-slate-800 pb-3 mb-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-black uppercase tracking-tight text-slate-900">KARTU STOK PERSEDIAAN BARANG JADI</h1>
+                <p class="text-xs text-slate-600 font-medium">Sistem Informasi Manajemen HPP & Persediaan</p>
+            </div>
+            <div class="text-right text-[11px] text-slate-500">
+                <p>Dicetak: <strong>{% now "d/m/Y H:i" %}</strong></p>
+            </div>
+        </div>
+        {% if selected_fg %}
+        <div class="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-200 text-xs">
+            <div>
+                <p><strong>Nama Produk:</strong> {{ selected_fg.name }}</p>
+                <p><strong>Kode SKU:</strong> #{{ selected_fg.sku }}</p>
+                <p><strong>Satuan:</strong> {{ selected_fg.unit }}</p>
+            </div>
+            <div>
+                <p><strong>Periode:</strong> 
+                    {% if start_date and end_date %}
+                        {{ start_date|date:"d/m/Y" }} s/d {{ end_date|date:"d/m/Y" }}
+                    {% elif start_date %}
+                        Mulai {{ start_date|date:"d/m/Y" }}
+                    {% elif end_date %}
+                        Sampai {{ end_date|date:"d/m/Y" }}
+                    {% else %}
+                        Semua Periode (Kumulatif)
+                    {% endif %}
+                </p>
+                <p><strong>Saldo Akhir:</strong> {{ ending_balance|rupiah }} {{ selected_fg.unit }}</p>
+                <p><strong>Cost Standar:</strong> Rp {{ selected_fg.standard_cost|rupiah }} / {{ selected_fg.unit }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Header Normal View -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
             <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
-                <a href="{% url 'stock_report' %}" class="text-indigo-600 hover:underline">Barang Jadi</a>
+                <a href="{% url 'finished_good_list' %}" class="hover:text-indigo-600 font-medium">Barang Jadi</a>
                 <span>&rsaquo;</span>
-                <span>Kartu Stock</span>
+                <span class="text-slate-600 font-semibold">Kartu Stok</span>
+                {% if selected_fg %}
+                <span>&rsaquo;</span>
+                <span class="text-indigo-700 font-mono font-bold">#{{ selected_fg.sku }}</span>
+                {% endif %}
             </div>
-            <h1 class="text-2xl font-bold text-slate-900">Kartu Stock Barang Jadi</h1>
-            <p class="text-sm text-slate-500">Histori buku besar mutasi masuk dan keluar per barang jadi beserta saldo akhir.</p>
+            <h1 class="text-2xl font-bold text-slate-900">
+                {% if selected_fg %}{{ selected_fg.name }}{% else %}Kartu Stok Barang Jadi{% endif %}
+            </h1>
+            <p class="text-sm text-slate-500">
+                {% if selected_fg %}
+                Buku besar pergerakan barang masuk, barang keluar, saldo awal, dan saldo akhir persediaan.
+                {% else %}
+                Pilih barang jadi untuk memeriksa riwayat pergerakan kartu stok.
+                {% endif %}
+            </p>
         </div>
 
-        <!-- Selector dropdown for choosing finished good -->
-        <form method="GET" class="flex items-center gap-2">
-            <select name="fg" onchange="this.form.submit()" class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50">
-                {% for fg in finished_goods %}
-                <option value="{{ fg.uuid }}" {% if selected_fg.uuid == fg.uuid %}selected{% endif %}>
-                    [{{ fg.sku }}] {{ fg.name }}
-                </option>
-                {% endfor %}
-            </select>
+        {% if selected_fg %}
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{% url 'stock_mutation_list' %}?fg={{ selected_fg.uuid }}" class="px-3 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-1.5 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>+ Catat Mutasi Produk Ini</span>
+            </a>
+            <button type="button" onclick="window.print()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <span>Cetak</span>
+            </button>
+            <a href="{% url 'stock_card_export_excel' %}?fg={{ selected_fg.uuid }}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}" 
+               class="px-3 py-2 bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 transition"
+               title="Unduh Kartu Stok ke Excel">
+                <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <span>Export Excel</span>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Alert Messages -->
+    {% if messages %}
+    <div class="space-y-2 print:hidden">
+        {% for message in messages %}
+        <div class="p-3 rounded-lg text-xs font-semibold {% if message.tags == 'error' %}bg-rose-100 text-rose-800 border border-rose-200{% elif message.tags == 'warning' %}bg-amber-100 text-amber-800 border border-amber-200{% else %}bg-emerald-100 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Filter Bar dengan Autocomplete & Periode Tanggal -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 print:hidden">
+        <form method="GET" x-ref="filterForm" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <!-- Autocomplete Combobox Barang Jadi -->
+                <div class="relative lg:col-span-2" @click.outside="fgDropdownOpen = false">
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Pilih Barang Jadi</label>
+                    <input type="hidden" name="fg" :value="selectedFg">
+                    
+                    <div class="relative">
+                        <input type="text" 
+                               x-model="searchFgQuery" 
+                               @focus="fgDropdownOpen = true" 
+                               @input="fgDropdownOpen = true;"
+                               placeholder="Cari nama atau SKU produk..." 
+                               class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium focus:ring-indigo-500 focus:border-indigo-500 bg-white pr-7">
+                        
+                        <div class="absolute right-2 top-2 flex items-center gap-1">
+                            <button type="button" x-show="searchFgQuery" @click="clearFg()" class="text-slate-400 hover:text-slate-600 text-xs font-bold leading-none cursor-pointer">&times;</button>
+                            <svg x-show="!searchFgQuery" class="w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+
+                    <!-- Dropdown List Hasil Autocomplete -->
+                    <div x-show="fgDropdownOpen" 
+                         class="absolute z-50 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl divide-y divide-slate-100" 
+                         style="display: none;">
+                        <template x-for="item in filterFilteredFg" :key="item.uuid">
+                            <div @click="selectFg(item)" 
+                                 class="p-2 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition text-xs"
+                                 :class="selectedFg === item.uuid ? 'bg-indigo-50 text-indigo-900 font-bold' : ''">
+                                <div>
+                                    <span class="font-mono text-[10px] text-slate-400 block" x-text="'#' + item.sku"></span>
+                                    <span class="text-slate-800 font-semibold" x-text="item.name"></span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="font-mono text-[11px] font-bold text-indigo-700 block" x-text="item.current_stock + ' ' + item.unit"></span>
+                                    <span class="text-[10px] text-slate-400 block" x-text="'@ Rp ' + Number(item.standard_cost).toLocaleString('id-ID')"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="filterFilteredFg.length === 0" class="p-3 text-center text-xs text-slate-400">
+                            Tidak ada barang jadi yang cocok.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tanggal Mulai -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tanggal Mulai</label>
+                    <input type="date" name="start_date" x-ref="startDate" value="{{ start_date_str }}" class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <!-- Tanggal Selesai -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tanggal Selesai</label>
+                    <input type="date" name="end_date" x-ref="endDate" value="{{ end_date_str }}" class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+
+            <!-- Baris Pintas Periode & Tombol Aksi -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[11px] font-medium text-slate-400 mr-1">Pintas Periode:</span>
+                    <button type="button" @click="setToday()" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition cursor-pointer">Hari Ini</button>
+                    <button type="button" @click="setThisMonth()" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition cursor-pointer">Bulan Ini</button>
+                    {% if start_date_str or end_date_str %}
+                    <a href="{% url 'stock_card_index' %}{% if selected_fg %}?fg={{ selected_fg.uuid }}{% endif %}" class="px-2.5 py-1 text-[11px] font-semibold bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-md transition ml-1">Reset Tanggal</a>
+                    {% endif %}
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button type="submit" class="px-4 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-md hover:bg-slate-700 shadow-xs flex items-center gap-1.5 transition cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                        <span>Terapkan Filter</span>
+                    </button>
+                </div>
+            </div>
         </form>
     </div>
 
     {% if selected_fg %}
-    <!-- Summary for current FG -->
-    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <span class="text-xs font-medium text-slate-400 uppercase">Cost Standar</span>
-            <div class="text-lg font-bold text-slate-800 mt-1">Rp {{ selected_fg.standard_cost|rupiah }}</div>
-            <div class="text-xs text-slate-400 mt-1">Satuan: {{ selected_fg.unit }}</div>
+    <!-- 5 Ringkasan KPI Kartu Stok -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <!-- 1. Saldo Awal -->
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Saldo Awal Periode</span>
+            <span class="text-xl font-bold text-slate-800 font-mono mt-1 block">{{ beginning_balance|rupiah }}</span>
+            <span class="text-[10px] text-slate-400 mt-0.5 block truncate font-medium">
+                {% if start_date %}sebelum {{ start_date|date:"d M Y" }}{% else %}saldo awal sistem{% endif %}
+            </span>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <span class="text-xs font-medium text-slate-400 uppercase">Total Masuk (IN)</span>
-            <div class="text-xl font-bold text-emerald-600 mt-1">+{{ total_in|rupiah }} {{ selected_fg.unit }}</div>
+
+        <!-- 2. Total Masuk -->
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block">Total Masuk (IN)</span>
+            <span class="text-xl font-bold text-emerald-700 font-mono mt-1 block">+{{ total_in|rupiah }}</span>
+            <span class="text-[10px] text-slate-400 mt-0.5 block truncate font-medium">
+                produksi / pembelian
+            </span>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <span class="text-xs font-medium text-slate-400 uppercase">Total Keluar (OUT)</span>
-            <div class="text-xl font-bold text-rose-600 mt-1">-{{ total_out|rupiah }} {{ selected_fg.unit }}</div>
+
+        <!-- 3. Total Keluar -->
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-rose-600 block">Total Keluar (OUT)</span>
+            <span class="text-xl font-bold text-rose-700 font-mono mt-1 block">-{{ total_out|rupiah }}</span>
+            <span class="text-[10px] text-slate-400 mt-0.5 block truncate font-medium">
+                penjualan / project / rusak
+            </span>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm bg-indigo-50/40">
-            <span class="text-xs font-bold text-indigo-700 uppercase">Saldo Stock Saat Ini</span>
-            <div class="text-2xl font-bold {% if selected_fg.current_stock > 0 %}text-indigo-900{% else %}text-rose-600{% endif %} mt-1">
-                {{ selected_fg.current_stock|rupiah }} {{ selected_fg.unit }}
-            </div>
+
+        <!-- 4. Saldo Akhir -->
+        <div class="bg-white p-3.5 rounded-xl border border-indigo-200 shadow-xs bg-indigo-50/20">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block">Saldo Akhir Periode</span>
+            <span class="text-xl font-black text-indigo-900 font-mono mt-1 block">{{ ending_balance|rupiah }}</span>
+            <span class="text-[10px] text-indigo-600 mt-0.5 block truncate font-medium">
+                Stok on-hand ({{ selected_fg.unit }})
+            </span>
+        </div>
+
+        <!-- 5. Valuasi Persediaan -->
+        <div class="bg-white p-3.5 rounded-xl border border-slate-300 shadow-xs col-span-2 lg:col-span-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">Valuasi Persediaan</span>
+            <span class="text-base sm:text-lg font-bold text-slate-900 font-mono mt-1 block">Rp {{ ending_valuation|rupiah }}</span>
+            <span class="text-[10px] text-slate-400 mt-0.5 block truncate font-medium">
+                @ Rp {{ selected_fg.standard_cost|rupiah }}/{{ selected_fg.unit }}
+            </span>
         </div>
     </div>
 
-    <!-- Mutation Table for selected FG -->
+    <!-- Table Kartu Stok -->
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="p-4 border-b border-slate-100 bg-slate-50 font-bold text-sm text-slate-800 flex justify-between items-center">
-            <span>Buku Besar Mutasi: [{{ selected_fg.sku }}] {{ selected_fg.name }}</span>
-            <a href="{% url 'stock_mutation_list' %}?fg={{ selected_fg.uuid }}" class="text-xs text-indigo-600 hover:underline font-semibold">
-                + Input Mutasi Barang Ini
-            </a>
+        <div class="p-3.5 border-b border-slate-100 bg-slate-50/70 flex justify-between items-center text-xs">
+            <span class="font-bold text-slate-800">
+                Buku Besar Persediaan: <span class="font-mono text-indigo-700">[{{ selected_fg.sku }}]</span> {{ selected_fg.name }}
+            </span>
+            <span class="text-slate-500 font-mono text-[11px]">
+                Cost Standar: <strong>Rp {{ selected_fg.standard_cost|rupiah }}</strong> / {{ selected_fg.unit }}
+            </span>
         </div>
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
-            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
-                <tr>
-                    <th class="px-4 py-3">Tanggal & Waktu</th>
-                    <th class="px-4 py-3">No. Referensi / Project</th>
-                    <th class="px-4 py-3">Keterangan</th>
-                    <th class="px-4 py-3 text-right text-emerald-700">Masuk (IN)</th>
-                    <th class="px-4 py-3 text-right text-rose-700">Keluar (OUT)</th>
-                    <th class="px-4 py-3 text-right">Saldo Akhir</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 font-mono text-xs sm:text-sm">
-                {% for m in mutations %}
-                <tr class="hover:bg-slate-50">
-                    <td class="px-4 py-3 text-slate-500 font-sans">{{ m.created_at|date:"d M Y, H:i" }}</td>
-                    <td class="px-4 py-3 font-semibold text-slate-800 font-sans">
-                        {% if m.project %}
-                        <a href="{% url 'project_detail' m.project.uuid %}" class="text-indigo-600 hover:underline">
-                            {{ m.reference_no }} ({{ m.project.code }}: {{ m.project.name|truncatechars:20 }})
-                        </a>
-                        {% else %}
-                        {{ m.reference_no|default:"-" }}
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-3 font-sans text-slate-600">{{ m.notes|default:"-" }}</td>
-                    <td class="px-4 py-3 text-right font-bold text-emerald-600">
-                        {% if m.mutation_type == 'IN' %}+{{ m.quantity|rupiah }}{% else %}-{% endif %}
-                    </td>
-                    <td class="px-4 py-3 text-right font-bold text-rose-600">
-                        {% if m.mutation_type == 'OUT' %}-{{ m.quantity|rupiah }}{% else %}-{% endif %}
-                    </td>
-                    <td class="px-4 py-3 text-right font-bold text-slate-900 bg-slate-50/50">
-                        {{ m.balance_after|rupiah }} {{ selected_fg.unit }}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="6" class="px-4 py-8 text-center text-slate-400 font-sans">Belum ada transaksi mutasi untuk barang jadi ini.</td>
-                </tr>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                    <tr>
+                        <th class="px-3.5 py-3 text-left">Waktu Transaksi</th>
+                        <th class="px-3.5 py-3 text-left">No. Referensi / Project</th>
+                        <th class="px-3 py-3 text-center">Tipe</th>
+                        <th class="px-3.5 py-3 text-right text-emerald-700">Masuk (IN)</th>
+                        <th class="px-3.5 py-3 text-right text-rose-700">Keluar (OUT)</th>
+                        <th class="px-3.5 py-3 text-right text-slate-900">Saldo Berjalan</th>
+                        <th class="px-3.5 py-3 text-right">Cost Satuan (Rp)</th>
+                        <th class="px-3.5 py-3 text-right">Nilai Transaksi (Rp)</th>
+                        <th class="px-3.5 py-3 text-left">Keterangan</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <!-- Baris Khusus: Saldo Awal Periode jika filter tanggal aktif -->
+                    {% if start_date %}
+                    <tr class="bg-amber-50/70 font-semibold text-slate-800 border-b-2 border-amber-200">
+                        <td class="px-3.5 py-2.5 font-mono text-slate-700 whitespace-nowrap">{{ start_date|date:"d M Y" }} 00:00</td>
+                        <td class="px-3.5 py-2.5 font-mono text-amber-900" colspan="2">
+                            <span class="px-2 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold uppercase tracking-wider">SALDO AWAL</span>
+                        </td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-slate-400">-</td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-slate-400">-</td>
+                        <td class="px-3.5 py-2.5 text-right font-mono font-black text-amber-900 bg-amber-100/60">
+                            {{ beginning_balance|rupiah }} {{ selected_fg.unit }}
+                        </td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-slate-600">
+                            Rp {{ selected_fg.standard_cost|rupiah }}
+                        </td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-amber-900">
+                            Rp {{ beginning_balance|rupiah }}
+                        </td>
+                        <td class="px-3.5 py-2.5 text-amber-800 text-[11px] italic">Saldo awal akumulasi sebelum tanggal {{ start_date|date:"d M Y" }}</td>
+                    </tr>
+                    {% endif %}
+
+                    {% for m in mutations %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <!-- Waktu -->
+                        <td class="px-3.5 py-3 font-mono text-slate-600 whitespace-nowrap">
+                            <span class="block text-slate-800 font-medium">{{ m.created_at|date:"d M Y" }}</span>
+                            <span class="text-[10px] text-slate-400">{{ m.created_at|date:"H:i:s" }}</span>
+                        </td>
+                        
+                        <!-- Ref / Project -->
+                        <td class="px-3.5 py-3 font-mono font-medium text-slate-800">
+                            <span class="block text-slate-900">{{ m.reference_no|default:"-" }}</span>
+                            {% if m.project %}
+                            <a href="{% url 'project_detail' m.project.uuid %}" class="inline-block text-[10px] text-indigo-600 hover:underline">
+                                #{{ m.project.code }} - {{ m.project.name|truncatechars:24 }}
+                            </a>
+                            {% endif %}
+                        </td>
+
+                        <!-- Tipe Mutasi -->
+                        <td class="px-3 py-3 text-center whitespace-nowrap">
+                            {% if m.mutation_type == 'IN' %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">IN</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">OUT</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Masuk (IN) -->
+                        <td class="px-3.5 py-3 text-right font-mono font-bold text-emerald-600 whitespace-nowrap">
+                            {% if m.mutation_type == 'IN' %}+{{ m.quantity|rupiah }} {{ selected_fg.unit }}{% else %}-{% endif %}
+                        </td>
+
+                        <!-- Keluar (OUT) -->
+                        <td class="px-3.5 py-3 text-right font-mono font-bold text-rose-600 whitespace-nowrap">
+                            {% if m.mutation_type == 'OUT' %}-{{ m.quantity|rupiah }} {{ selected_fg.unit }}{% else %}-{% endif %}
+                        </td>
+
+                        <!-- Saldo Berjalan -->
+                        <td class="px-3.5 py-3 text-right font-mono font-bold text-slate-900 bg-slate-50/50 whitespace-nowrap">
+                            {{ m.balance_after|rupiah }} {{ selected_fg.unit }}
+                        </td>
+
+                        <!-- Cost Standar -->
+                        <td class="px-3.5 py-3 text-right font-mono text-slate-600 whitespace-nowrap">
+                            Rp {{ selected_fg.standard_cost|rupiah }}
+                        </td>
+
+                        <!-- Total Nilai -->
+                        <td class="px-3.5 py-3 text-right font-mono font-semibold text-slate-800 whitespace-nowrap">
+                            Rp {{ m.transaction_value|rupiah }}
+                        </td>
+
+                        <!-- Keterangan -->
+                        <td class="px-3.5 py-3 text-slate-600 max-w-xs truncate text-[11px]">
+                            {{ m.notes|default:"-" }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="px-4 py-12 text-center text-slate-400">
+                            <svg class="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                            <p class="font-medium text-slate-600">Belum ada transaksi mutasi untuk produk ini dalam rentang tanggal terpilih.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if mutations.has_other_pages %}
+        <div class="p-3.5 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs print:hidden pagination-container">
+            <div class="text-slate-500">
+                Menampilkan <span class="font-bold text-slate-800">{{ mutations.start_index }}</span> - <span class="font-bold text-slate-800">{{ mutations.end_index }}</span> dari <span class="font-bold text-slate-800">{{ mutations.paginator.count }}</span> transaksi
+            </div>
+            <div class="flex items-center gap-1">
+                {% if mutations.has_previous %}
+                <a href="?page={{ mutations.previous_page_number }}{% if selected_fg %}&fg={{ selected_fg.uuid }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}" 
+                   class="px-2.5 py-1.5 border border-slate-300 rounded hover:bg-slate-50 font-medium text-slate-700">
+                    &lsaquo; Prev
+                </a>
+                {% endif %}
+
+                {% for page_num in mutations.paginator.page_range %}
+                    {% if page_num == mutations.number %}
+                    <span class="px-3 py-1.5 bg-indigo-600 text-white font-bold rounded">{{ page_num }}</span>
+                    {% elif page_num > mutations.number|add:'-3' and page_num < mutations.number|add:'3' %}
+                    <a href="?page={{ page_num }}{% if selected_fg %}&fg={{ selected_fg.uuid }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}" 
+                       class="px-2.5 py-1.5 border border-slate-300 rounded hover:bg-slate-50 text-slate-700">
+                        {{ page_num }}
+                    </a>
+                    {% endif %}
                 {% endfor %}
-            </tbody>
-        </table>
+
+                {% if mutations.has_next %}
+                <a href="?page={{ mutations.next_page_number }}{% if selected_fg %}&fg={{ selected_fg.uuid }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}" 
+                   class="px-2.5 py-1.5 border border-slate-300 rounded hover:bg-slate-50 font-medium text-slate-700">
+                    Next &rsaquo;
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% else %}
     <div class="bg-white p-12 text-center text-slate-400 rounded-xl border border-slate-200">
@@ -110,4 +422,61 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+function stockCardApp() {
+    return {
+        selectedFg: '{% if selected_fg %}{{ selected_fg.uuid }}{% endif %}',
+        searchFgQuery: '{% if selected_fg %}[{{ selected_fg.sku|escapejs }}] {{ selected_fg.name|escapejs }}{% endif %}',
+        fgDropdownOpen: false,
+        finishedGoodsList: {{ finished_goods_json|safe }},
+
+        get filterFilteredFg() {
+            if (!this.searchFgQuery) return this.finishedGoodsList;
+            const q = this.searchFgQuery.toLowerCase();
+            return this.finishedGoodsList.filter(fg => 
+                fg.name.toLowerCase().includes(q) || fg.sku.toLowerCase().includes(q)
+            );
+        },
+        selectFg(item) {
+            this.selectedFg = item.uuid;
+            this.searchFgQuery = '[' + item.sku + '] ' + item.name;
+            this.fgDropdownOpen = false;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        },
+        clearFg() {
+            this.selectedFg = '';
+            this.searchFgQuery = '';
+            this.fgDropdownOpen = false;
+        },
+
+        // Shortcut Periode Tanggal
+        setToday() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const today = `${y}-${m}-${d}`;
+            this.$refs.startDate.value = today;
+            this.$refs.endDate.value = today;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        },
+        setThisMonth() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            this.$refs.startDate.value = `${y}-${m}-01`;
+            this.$refs.endDate.value = `${y}-${m}-${d}`;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        }
+    };
+}
+</script>
 {% endblock %}
