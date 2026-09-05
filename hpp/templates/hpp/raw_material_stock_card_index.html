@@ -1,123 +1,497 @@
-﻿{% extends "hpp/base.html" %}
+{% extends "hpp/base.html" %}
 {% load custom_filters %}
 
-{% block title %}Kartu Stok Bahan Baku - HPP & Manufaktur{% endblock %}
+{% block title %}Kartu Stok: {% if selected_mat %}{{ selected_mat.name }}{% else %}Bahan Baku{% endif %} - HPP & Manufaktur{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
-                <a href="{% url 'raw_material_list' %}" class="hover:text-emerald-600">Bahan Baku</a>
-                <span>&rsaquo;</span>
-                <span>Kartu Stok</span>
+<style>
+@media print {
+    /* Sembunyikan elemen non-cetak */
+    nav, aside, header, .print\:hidden, [x-data] form, .pagination-container {
+        display: none !important;
+    }
+    body, main {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        font-size: 10.5px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    .print\:block {
+        display: block !important;
+    }
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 10px !important;
+    }
+    th, td {
+        border: 1px solid #94a3b8 !important;
+        padding: 4px 6px !important;
+    }
+    thead th {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+    }
+    .shadow-sm, .shadow {
+        box-shadow: none !important;
+        border-color: #cbd5e1 !important;
+    }
+}
+</style>
+
+<div class="space-y-6" x-data="stockCardApp()">
+    <!-- Header Print Only -->
+    <div class="hidden print:block border-b-2 border-slate-800 pb-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-black uppercase tracking-tight text-slate-900">KARTU STOK BAHAN BAKU</h1>
+                <p class="text-xs text-slate-600 font-medium">Sistem Informasi Manajemen HPP & Persediaan</p>
             </div>
-            <h1 class="text-2xl font-bold text-slate-900">Kartu Stok Bahan Baku</h1>
-            <p class="text-sm text-slate-500">Pilih bahan baku untuk melihat rincian riwayat arus barang masuk, pemakaian, dan sisa stok.</p>
+            <div class="text-right text-[11px] text-slate-500">
+                <p>Dicetak: <strong>{% now "d/m/Y H:i" %}</strong></p>
+            </div>
         </div>
+        {% if selected_mat %}
+        <div class="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-200 text-xs">
+            <div>
+                <p><strong>Nama Bahan:</strong> {{ selected_mat.name }}</p>
+                <p><strong>Kode Barang:</strong> #{{ selected_mat.code }}</p>
+                <p><strong>Satuan Dasar:</strong> {{ selected_mat.stock_unit }}</p>
+            </div>
+            <div>
+                <p><strong>Periode Laporan:</strong> 
+                    {% if start_date and end_date %}
+                        {{ start_date }} s/d {{ end_date }}
+                    {% elif start_date %}
+                        Mulai {{ start_date }}
+                    {% elif end_date %}
+                        Sampai {{ end_date }}
+                    {% else %}
+                        Semua Periode (Kumulatif)
+                    {% endif %}
+                </p>
+                <p><strong>Saldo Akhir:</strong> {{ ending_balance|rupiah }} {{ selected_mat.stock_unit }}</p>
+                <p><strong>Harga Beli Terakhir:</strong> Rp {{ selected_mat.last_purchase_price|rupiah }} / {{ selected_mat.stock_unit }}</p>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
-    <!-- Selector Bar -->
-    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <form method="GET" class="flex flex-col sm:flex-row items-center gap-3">
-            <label class="text-xs font-bold uppercase tracking-wider text-slate-600 shrink-0">Pilih Bahan Baku:</label>
-            <select name="mat" onchange="this.form.submit()" class="w-full sm:w-96 rounded-md border border-slate-300 px-3 py-2 text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500">
-                {% for m in materials %}
-                <option value="{{ m.uuid }}" {% if selected_mat.uuid == m.uuid %}selected{% endif %}>
-                    [{{ m.code }}] {{ m.name }} (Stok: {{ m.current_stock|rupiah }} {{ m.stock_unit }})
-                </option>
-                {% endfor %}
-            </select>
-            {% if selected_mat %}
-            <a href="{% url 'raw_material_stock_mutation_list' %}?mat={{ selected_mat.uuid }}" class="px-3.5 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-md hover:bg-emerald-700 shadow shrink-0">
-                + Input Mutasi
+    <!-- Header Normal View -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'raw_material_list' %}" class="hover:text-emerald-600 font-medium">Bahan Baku</a>
+                <span>&rsaquo;</span>
+                <span class="text-slate-600 font-semibold">Kartu Stok</span>
+                {% if selected_mat %}
+                <span>&rsaquo;</span>
+                <span class="text-emerald-700 font-mono font-bold">#{{ selected_mat.code }}</span>
+                {% endif %}
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">
+                {% if selected_mat %}{{ selected_mat.name }}{% else %}Kartu Stok Bahan Baku{% endif %}
+            </h1>
+            <p class="text-sm text-slate-500">
+                {% if selected_mat %}
+                Rincian arus mutasi barang masuk, pemakaian, saldo awal, dan saldo akhir persediaan.
+                {% else %}
+                Pilih bahan baku untuk memeriksa riwayat transaksi kartu persediaan.
+                {% endif %}
+            </p>
+        </div>
+
+        {% if selected_mat %}
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Tombol Cetak -->
+            <button type="button" onclick="window.print()" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <span>Cetak / PDF</span>
+            </button>
+
+            <!-- Tombol Export Excel -->
+            <a href="{% url 'raw_material_stock_card_export_excel' %}?mat={{ selected_mat.uuid }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold rounded-lg hover:bg-emerald-100 shadow-sm flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Export Excel</span>
             </a>
-            {% endif %}
+
+            <!-- Tombol Profil Master -->
+            <a href="{% url 'raw_material_detail' selected_mat.uuid %}" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>Profil Master</span>
+            </a>
+
+            <!-- Tombol Input Mutasi -->
+            <a href="{% url 'raw_material_stock_mutation_list' %}?mat={{ selected_mat.uuid }}" class="px-3.5 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 shadow flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>+ Input Mutasi</span>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Filter & Selector Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm print:hidden">
+        <form method="GET" x-ref="filterForm" class="space-y-3">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+                
+                <!-- Autocomplete Combobox Bahan Baku -->
+                <div class="lg:col-span-5 relative" @click.outside="showDropdown = false">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Pilih Bahan Baku *
+                    </label>
+                    <input type="hidden" name="mat" :value="selectedUuid">
+                    
+                    <div class="relative">
+                        <input type="text" 
+                               x-model="searchQuery" 
+                               @focus="showDropdown = true" 
+                               @input="showDropdown = true; if(!searchQuery) selectedUuid = '';"
+                               placeholder="Cari kode atau nama bahan baku..." 
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white pr-8">
+                        
+                        <div class="absolute right-2.5 top-2.5 flex items-center gap-1">
+                            <button type="button" x-show="searchQuery" @click="resetSearch()" class="text-slate-400 hover:text-slate-600 text-xs font-bold">&times;</button>
+                            <svg class="w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                    </div>
+
+                    <!-- Dropdown List Hasil Autocomplete -->
+                    <div x-show="showDropdown" 
+                         class="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-2xl divide-y divide-slate-100" 
+                         style="display: none;">
+                        <template x-for="item in filteredMaterials" :key="item.uuid">
+                            <div @click="selectMaterial(item)" 
+                                 class="p-2.5 hover:bg-emerald-50 cursor-pointer flex items-center justify-between transition"
+                                 :class="selectedUuid === item.uuid ? 'bg-emerald-50/70' : ''">
+                                <div>
+                                    <span class="font-mono text-[10px] text-slate-400 block" x-text="'#' + item.code"></span>
+                                    <span class="font-bold text-slate-800 text-xs" x-text="item.name"></span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="font-mono text-xs font-bold text-emerald-700 block" x-text="item.current_stock + ' ' + item.stock_unit"></span>
+                                    <span class="text-[10px] text-slate-400" x-text="'Rp ' + Number(item.last_price).toLocaleString('id-ID')"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="filteredMaterials.length === 0" class="p-3 text-center text-xs text-slate-400">
+                            Tidak ditemukan bahan baku dengan kata kunci tersebut.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dari Tanggal -->
+                <div class="lg:col-span-2">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Dari Tanggal
+                    </label>
+                    <input type="date" name="start_date" x-model="startDate" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+
+                <!-- Sampai Tanggal -->
+                <div class="lg:col-span-2">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Sampai Tanggal
+                    </label>
+                    <input type="date" name="end_date" x-model="endDate" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+
+                <!-- Action Buttons Filter -->
+                <div class="lg:col-span-3 flex items-center gap-2">
+                    <button type="submit" class="flex-1 px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 shadow-sm transition">
+                        Terapkan Filter
+                    </button>
+                    <button type="button" @click="setThisMonth()" class="px-3 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-200 border border-slate-200 transition shrink-0" title="Set rentang ke bulan berjalan">
+                        Bulan Ini
+                    </button>
+                    {% if start_date or end_date %}
+                    <a href="{% url 'raw_material_stock_card_index' %}?mat={{ selected_mat.uuid }}" class="px-3 py-2 bg-rose-50 text-rose-700 text-xs font-semibold rounded-lg hover:bg-rose-100 border border-rose-200 transition shrink-0" title="Reset filter tanggal">
+                        Reset
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
         </form>
     </div>
 
     {% if selected_mat %}
-    <!-- Summary KPI -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Stok On-Hand Saat Ini</span>
-            <span class="text-2xl font-black text-slate-900 font-mono mt-1 block">{{ selected_mat.current_stock|rupiah }} {{ selected_mat.stock_unit }}</span>
-            <span class="text-[10px] text-slate-400 mt-1 block">Satuan dasar gudang</span>
+    <!-- Multi-Satuan Info Alert -->
+    {% if selected_mat.conversions.exists %}
+    <div class="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200 text-xs flex flex-wrap items-center gap-2 print:border-slate-300">
+        <span class="font-bold text-emerald-900 flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+            Konversi Multi-Satuan Tersedia:
+        </span>
+        {% for c in selected_mat.conversions.all %}
+        <span class="px-2.5 py-1 bg-white border border-emerald-300 rounded-lg font-mono text-emerald-800 shadow-xs">
+            1 {{ c.unit_name }} = <strong>{{ c.conversion_factor|rupiah }} {{ selected_mat.stock_unit }}</strong>
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Summary KPI Persediaan (5 Kartu) -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <!-- 1. Saldo Awal -->
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Saldo Awal Periode</span>
+            <span class="text-xl font-black text-slate-800 font-mono mt-1 block">{{ beginning_balance|rupiah }}</span>
+            <span class="text-[10px] text-slate-400 mt-0.5 block truncate font-medium">
+                {% if start_date %}Sebelum {{ start_date }}{% else %}Awal sistem{% endif %} ({{ selected_mat.stock_unit }})
+            </span>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Harga Beli Terakhir</span>
-            <span class="text-2xl font-black text-slate-800 font-mono mt-1 block">Rp {{ selected_mat.last_purchase_price|rupiah }}</span>
-            <span class="text-[10px] text-slate-400 mt-1 block">Per 1 {{ selected_mat.stock_unit }}</span>
+
+        <!-- 2. Masuk (IN) -->
+        <div class="bg-white p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/20 shadow-sm">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">Total Masuk (IN)</span>
+            <span class="text-xl font-black text-emerald-700 font-mono mt-1 block">+{{ total_in|rupiah }}</span>
+            <span class="text-[10px] text-emerald-600 mt-0.5 block truncate font-medium">
+                Pembelian & retur ({{ selected_mat.stock_unit }})
+            </span>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-sm">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-700 block">Total Valuasi Stok</span>
-            <span class="text-2xl font-black text-emerald-700 font-mono mt-1 block">Rp {{ selected_mat.total_inventory_value|rupiah }}</span>
-            <span class="text-[10px] text-emerald-600 mt-1 block">Nilai persediaan uang</span>
+
+        <!-- 3. Keluar (OUT) -->
+        <div class="bg-white p-3.5 rounded-xl border border-rose-200 bg-rose-50/20 shadow-sm">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-rose-700 block">Total Keluar (OUT)</span>
+            <span class="text-xl font-black text-rose-700 font-mono mt-1 block">-{{ total_out|rupiah }}</span>
+            <span class="text-[10px] text-rose-600 mt-0.5 block truncate font-medium">
+                Produksi & rusak ({{ selected_mat.stock_unit }})
+            </span>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Total Masuk & Keluar</span>
-            <span class="text-xs font-mono mt-2 block text-emerald-600 font-bold">&darr; IN: {{ total_in|rupiah }} {{ selected_mat.stock_unit }}</span>
-            <span class="text-xs font-mono mt-0.5 block text-rose-600 font-bold">&uarr; OUT: {{ total_out|rupiah }} {{ selected_mat.stock_unit }}</span>
+
+        <!-- 4. Saldo Akhir Periode -->
+        <div class="bg-white p-3.5 rounded-xl border border-slate-300 shadow-sm bg-slate-50/50">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">Saldo Akhir Periode</span>
+            <span class="text-xl font-black text-slate-900 font-mono mt-1 block">{{ ending_balance|rupiah }}</span>
+            <span class="text-[10px] text-slate-500 mt-0.5 block truncate font-medium">
+                Stok on-hand ({{ selected_mat.stock_unit }})
+            </span>
+        </div>
+
+        <!-- 5. Valuasi Saldo Akhir -->
+        <div class="bg-white p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/30 shadow-sm col-span-2 lg:col-span-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block">Valuasi Persediaan</span>
+            <span class="text-xl font-black text-indigo-800 font-mono mt-1 block">Rp {{ total_inventory_value|rupiah }}</span>
+            <span class="text-[10px] text-indigo-600 mt-0.5 block truncate font-medium">
+                @ Rp {{ selected_mat.last_purchase_price|rupiah }}/{{ selected_mat.stock_unit }}
+            </span>
         </div>
     </div>
 
     <!-- Table Kartu Stok -->
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table class="min-w-full divide-y divide-slate-200 text-xs">
-            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
-                <tr>
-                    <th class="px-4 py-3">Waktu</th>
-                    <th class="px-4 py-3">No. Referensi / Project</th>
-                    <th class="px-4 py-3 text-center">Tipe</th>
-                    <th class="px-4 py-3 text-right">Satuan Transaksi</th>
-                    <th class="px-4 py-3 text-right">Masuk (IN)</th>
-                    <th class="px-4 py-3 text-right">Keluar (OUT)</th>
-                    <th class="px-4 py-3 text-right">Saldo Stok Dasar</th>
-                    <th class="px-4 py-3">Keterangan</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                {% for m in mutations %}
-                <tr class="hover:bg-slate-50">
-                    <td class="px-4 py-3 font-mono text-slate-700 whitespace-nowrap">{{ m.created_at|date:"Y-m-d H:i" }}</td>
-                    <td class="px-4 py-3 font-mono font-medium text-slate-800">
-                        {{ m.reference_no|default:"-" }}
-                        {% if m.project %}
-                        <a href="{% url 'project_detail' m.project.uuid %}" class="block text-[10px] text-indigo-600 hover:underline">
-                            #{{ m.project.code }} - {{ m.project.name }}
-                        </a>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                        {% if m.mutation_type == 'IN' %}
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">IN</span>
-                        {% else %}
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">OUT</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-3 text-right font-mono text-slate-700">
-                        {{ m.input_qty|rupiah }} {{ m.input_unit }}
-                    </td>
-                    <td class="px-4 py-3 text-right font-mono font-bold text-emerald-600">
-                        {% if m.mutation_type == 'IN' %}+{{ m.stock_qty|rupiah }} {{ selected_mat.stock_unit }}{% else %}-{% endif %}
-                    </td>
-                    <td class="px-4 py-3 text-right font-mono font-bold text-rose-600">
-                        {% if m.mutation_type == 'OUT' %}-{{ m.stock_qty|rupiah }} {{ selected_mat.stock_unit }}{% else %}-{% endif %}
-                    </td>
-                    <td class="px-4 py-3 text-right font-mono font-bold text-slate-900 bg-slate-50">
-                        {{ m.balance_after|rupiah }} {{ selected_mat.stock_unit }}
-                    </td>
-                    <td class="px-4 py-3 text-slate-500">{{ m.notes|default:"-" }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="8" class="px-4 py-8 text-center text-slate-400">Belum ada transaksi mutasi stok pada bahan baku ini.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-3.5 py-3">Waktu</th>
+                        <th class="px-3.5 py-3">No. Referensi / Project</th>
+                        <th class="px-3 py-3 text-center">Tipe</th>
+                        <th class="px-3.5 py-3 text-right">Satuan Transaksi</th>
+                        <th class="px-3.5 py-3 text-right">Masuk (IN)</th>
+                        <th class="px-3.5 py-3 text-right">Keluar (OUT)</th>
+                        <th class="px-3.5 py-3 text-right">Saldo Berjalan</th>
+                        <th class="px-3.5 py-3 text-right">Harga Satuan</th>
+                        <th class="px-3.5 py-3 text-right">Total Nilai</th>
+                        <th class="px-3.5 py-3">Keterangan</th>
+                        <th class="px-3 py-3 text-center print:hidden">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <!-- Baris Khusus: Saldo Awal Periode jika filter tanggal aktif -->
+                    {% if start_date %}
+                    <tr class="bg-amber-50/70 font-semibold text-slate-800 border-b-2 border-amber-200">
+                        <td class="px-3.5 py-2.5 font-mono text-slate-700 whitespace-nowrap">{{ start_date }} 00:00</td>
+                        <td class="px-3.5 py-2.5 font-mono text-amber-900" colspan="2">
+                            <span class="px-2 py-0.5 bg-amber-200 text-amber-900 rounded text-[10px] font-bold uppercase">SALDO AWAL</span>
+                        </td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-slate-500">{{ beginning_balance|rupiah }} {{ selected_mat.stock_unit }}</td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-slate-400">-</td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-slate-400">-</td>
+                        <td class="px-3.5 py-2.5 text-right font-mono font-black text-amber-900 bg-amber-100/60">
+                            {{ beginning_balance|rupiah }} {{ selected_mat.stock_unit }}
+                        </td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-slate-600">
+                            Rp {{ selected_mat.last_purchase_price|rupiah }}
+                        </td>
+                        <td class="px-3.5 py-2.5 text-right font-mono text-amber-900">
+                            -
+                        </td>
+                        <td class="px-3.5 py-2.5 text-amber-800 text-[11px] italic" colspan="2">Saldo awal akumulasi sebelum tanggal {{ start_date }}</td>
+                    </tr>
+                    {% endif %}
+
+                    {% for m in mutations %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <!-- Waktu -->
+                        <td class="px-3.5 py-3 font-mono text-slate-700 whitespace-nowrap">{{ m.created_at|date:"Y-m-d H:i" }}</td>
+                        
+                        <!-- Ref / Project -->
+                        <td class="px-3.5 py-3 font-mono font-medium text-slate-800">
+                            {{ m.reference_no|default:"-" }}
+                            {% if m.project %}
+                            <a href="{% url 'project_detail' m.project.uuid %}" class="block text-[10px] text-indigo-600 hover:underline">
+                                #{{ m.project.code }} - {{ m.project.name }}
+                            </a>
+                            {% endif %}
+                        </td>
+
+                        <!-- Tipe Mutasi -->
+                        <td class="px-3 py-3 text-center">
+                            {% if m.mutation_type == 'IN' %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">IN</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">OUT</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Satuan Transaksi -->
+                        <td class="px-3.5 py-3 text-right font-mono text-slate-700">
+                            {{ m.input_qty|rupiah }} {{ m.input_unit }}
+                        </td>
+
+                        <!-- Masuk (IN) -->
+                        <td class="px-3.5 py-3 text-right font-mono font-bold text-emerald-600">
+                            {% if m.mutation_type == 'IN' %}+{{ m.stock_qty|rupiah }} {{ selected_mat.stock_unit }}{% else %}-{% endif %}
+                        </td>
+
+                        <!-- Keluar (OUT) -->
+                        <td class="px-3.5 py-3 text-right font-mono font-bold text-rose-600">
+                            {% if m.mutation_type == 'OUT' %}-{{ m.stock_qty|rupiah }} {{ selected_mat.stock_unit }}{% else %}-{% endif %}
+                        </td>
+
+                        <!-- Saldo Berjalan -->
+                        <td class="px-3.5 py-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">
+                            {{ m.balance_after|rupiah }} {{ selected_mat.stock_unit }}
+                        </td>
+
+                        <!-- Harga Satuan -->
+                        <td class="px-3.5 py-3 text-right font-mono text-slate-700 whitespace-nowrap">
+                            {% if m.unit_price > 0 %}
+                            Rp {{ m.unit_price|rupiah }}
+                            {% else %}
+                            <span class="text-slate-300">-</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Total Nilai -->
+                        <td class="px-3.5 py-3 text-right font-mono font-semibold text-slate-800 whitespace-nowrap">
+                            {% if m.total_price > 0 %}
+                            Rp {{ m.total_price|rupiah }}
+                            {% else %}
+                            <span class="text-slate-300">-</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Keterangan -->
+                        <td class="px-3.5 py-3 text-slate-500 max-w-xs truncate" title="{{ m.notes }}">
+                            {{ m.notes|default:"-" }}
+                        </td>
+
+                        <!-- Aksi Detail -->
+                        <td class="px-3 py-3 text-center whitespace-nowrap print:hidden">
+                            <a href="{% url 'raw_material_mutation_detail' m.uuid %}" class="inline-block text-[11px] bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 px-2 py-1 rounded font-semibold transition" title="Lihat detail transaksi">
+                                Detail
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="px-4 py-12 text-center text-slate-400">
+                            <svg class="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <p class="font-medium text-slate-600">Belum ada riwayat transaksi mutasi pada bahan baku ini.</p>
+                            {% if start_date or end_date %}
+                            <p class="text-xs text-slate-400 mt-1">Coba sesuaikan atau reset rentang tanggal filter.</p>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination Navigation -->
+    {% if mutations.has_other_pages %}
+    <div class="bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-xs print:hidden pagination-container">
+        <div class="text-slate-500 font-medium">
+            Menampilkan halaman <strong class="text-slate-800">{{ mutations.number }}</strong> dari <strong class="text-slate-800">{{ mutations.paginator.num_pages }}</strong> (Total {{ mutations.paginator.count }} mutasi)
+        </div>
+        <div class="inline-flex items-center gap-1 font-semibold">
+            {% if mutations.has_previous %}
+            <a href="?page=1&mat={{ selected_mat.uuid }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition" title="Halaman Pertama">&laquo;</a>
+            <a href="?page={{ mutations.previous_page_number }}&mat={{ selected_mat.uuid }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition">Sebelumnya</a>
+            {% else %}
+            <span class="px-3 py-1.5 rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed">Sebelumnya</span>
+            {% endif %}
+
+            <span class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-bold">
+                {{ mutations.number }}
+            </span>
+
+            {% if mutations.has_next %}
+            <a href="?page={{ mutations.next_page_number }}&mat={{ selected_mat.uuid }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition">Berikutnya</a>
+            <a href="?page={{ mutations.paginator.num_pages }}&mat={{ selected_mat.uuid }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition" title="Halaman Terakhir">&raquo;</a>
+            {% else %}
+            <span class="px-3 py-1.5 rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed">Berikutnya</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- State jika tidak ada bahan baku yang dipilih atau master kosong -->
+    <div class="bg-white p-12 rounded-xl border border-slate-200 text-center shadow-sm">
+        <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+        <h3 class="text-base font-bold text-slate-700">Belum ada bahan baku yang dipilih</h3>
+        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Silakan cari dan pilih salah satu bahan baku pada kolom pencarian di atas untuk melihat kartu stok persediaan.</p>
     </div>
     {% endif %}
 </div>
+
+<script>
+function stockCardApp() {
+    return {
+        materials: {{ materials_json|safe }},
+        selectedUuid: '{{ selected_mat.uuid|default:'' }}',
+        searchQuery: '{% if selected_mat %}[{{ selected_mat.code|escapejs }}] {{ selected_mat.name|escapejs }}{% endif %}',
+        showDropdown: false,
+        startDate: '{{ start_date|default:'' }}',
+        endDate: '{{ end_date|default:'' }}',
+
+        get filteredMaterials() {
+            if (!this.searchQuery) return this.materials;
+            const q = this.searchQuery.toLowerCase();
+            return this.materials.filter(m => 
+                m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q)
+            );
+        },
+        selectMaterial(m) {
+            this.selectedUuid = m.uuid;
+            this.searchQuery = '[' + m.code + '] ' + m.name;
+            this.showDropdown = false;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        },
+        resetSearch() {
+            this.selectedUuid = '';
+            this.searchQuery = '';
+            this.showDropdown = true;
+        },
+        setThisMonth() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            this.startDate = `${y}-${m}-01`;
+            this.endDate = `${y}-${m}-${d}`;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        }
+    };
+}
+</script>
 {% endblock %}

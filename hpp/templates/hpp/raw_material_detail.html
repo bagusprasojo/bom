@@ -1,0 +1,427 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}{{ material.name }} - Detail Bahan Baku{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ 
+    editModalOpen: false, 
+    currentMaterial: {
+        uuid: '{{ material.uuid }}',
+        code: '{{ material.code|escapejs }}',
+        name: '{{ material.name|escapejs }}',
+        category: '{{ material.category|escapejs }}',
+        stock_unit: '{{ material.stock_unit|escapejs }}',
+        last_purchase_price: '{{ material.last_purchase_price }}',
+        minimum_stock: '{{ material.minimum_stock }}',
+        notes: '{{ material.notes|escapejs }}'
+    },
+    editConversions: [
+        {% for conv in material.conversions.all %}
+        {
+            unit_name: '{{ conv.unit_name|escapejs }}',
+            factor: '{{ conv.conversion_factor }}',
+            notes: '{{ conv.notes|escapejs }}'
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ],
+    addEditConversion() {
+        this.editConversions.push({
+            unit_name: '',
+            factor: 1,
+            notes: ''
+        });
+    },
+    removeEditConversion(index) {
+        this.editConversions.splice(index, 1);
+    }
+}">
+    <!-- Header & Navigation -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'raw_material_list' %}" class="hover:text-emerald-600 font-semibold">&larr; Kembali ke Daftar Bahan Baku</a>
+                <span>&rsaquo;</span>
+                <span class="font-mono text-slate-500">#{{ material.code }}</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-black text-slate-900">{{ material.name }}</h1>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                    {{ material.category|default:"Umum" }}
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">Didaftarkan pada: {{ material.created_at|date:"Y-m-d H:i" }} &bull; Diperbarui: {{ material.updated_at|date:"Y-m-d H:i" }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'raw_material_list' %}" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                <span>Kembali</span>
+            </a>
+            <a href="{% url 'raw_material_stock_card' material.uuid %}" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                <span>Kartu Stok</span>
+            </a>
+            <button @click="editModalOpen = true" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                <span>Edit Bahan Baku</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-4 rounded-xl text-xs font-semibold {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Key Metrics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Stok Tersedia</span>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-3xl font-black font-mono {% if material.current_stock <= material.minimum_stock %}text-rose-600{% else %}text-slate-900{% endif %}">
+                    {{ material.current_stock|rupiah }}
+                </span>
+                <span class="text-sm font-bold uppercase text-slate-500 font-mono">{{ material.stock_unit }}</span>
+            </div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Batas Minimum: {{ material.minimum_stock|rupiah }} {{ material.stock_unit }}</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Harga Beli Terakhir</span>
+            <div class="mt-2 flex items-baseline gap-1">
+                <span class="text-2xl font-black font-mono text-slate-800">
+                    Rp {{ material.last_purchase_price|rupiah }}
+                </span>
+                <span class="text-xs text-slate-400">/ {{ material.stock_unit }}</span>
+            </div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Digunakan untuk valuasi & HPP</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Total Valuasi Persediaan</span>
+            <div class="mt-2">
+                <span class="text-2xl font-black font-mono text-emerald-600">
+                    Rp {{ material.total_inventory_value|rupiah }}
+                </span>
+            </div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Stok saat ini &times; Harga Terakhir</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Satuan Konversi Aktif</span>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-3xl font-black font-mono text-indigo-600">
+                    {{ material.conversions.count }}
+                </span>
+                <span class="text-xs text-slate-400">Satuan Alternatif</span>
+            </div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Satuan Dasar: <strong>{{ material.stock_unit }}</strong></span>
+        </div>
+    </div>
+
+    <!-- 2 Column Section: Multi-Satuan Konversi & Detail Catatan -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left: Multi Satuan Konversi (2 Cols) -->
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-5 border-b border-slate-100">
+                <h2 class="font-bold text-slate-900 text-sm">Daftar Multi-Satuan & Rasio Konversi</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Satuan alternatif yang dapat digunakan pada transaksi mutasi & perancangan BOM.</p>
+            </div>
+
+            <div class="p-5">
+                <div class="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="font-bold text-slate-800">Satuan Dasar Persediaan (Stok Gudang):</span>
+                        <span class="font-mono uppercase font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">{{ material.stock_unit }}</span>
+                    </div>
+                    <span class="text-[11px] text-slate-500">1 {{ material.stock_unit }} = 1.0000 {{ material.stock_unit }}</span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="py-2.5 px-3">Satuan Alternatif</th>
+                                <th class="py-2.5 px-3 text-right">Faktor Pengali (Isi)</th>
+                                <th class="py-2.5 px-3">Persamaan Konversi</th>
+                                <th class="py-2.5 px-3">Keterangan</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 font-medium">
+                            {% for conv in material.conversions.all %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-3 px-3">
+                                    <span class="font-bold text-slate-900 uppercase font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{{ conv.unit_name }}</span>
+                                </td>
+                                <td class="py-3 px-3 text-right font-mono font-bold text-slate-800">
+                                    {{ conv.conversion_factor|rupiah }}
+                                </td>
+                                <td class="py-3 px-3 font-mono text-emerald-700 font-bold">
+                                    1 {{ conv.unit_name }} = {{ conv.conversion_factor|rupiah }} {{ material.stock_unit }}
+                                </td>
+                                <td class="py-3 px-3 text-slate-500">
+                                    {{ conv.notes|default:"-" }}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="py-8 text-center text-slate-400">
+                                    Belum ada satuan alternatif yang dikonfigurasi untuk bahan baku ini.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Spesifikasi & Catatan (1 Col) -->
+        <div class="space-y-4">
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <h3 class="font-bold text-slate-900 text-sm pb-2 border-b border-slate-100">Informasi Teknis</h3>
+                
+                <div class="space-y-2.5 text-xs">
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Kode Material</span>
+                        <span class="font-mono font-bold text-slate-800">#{{ material.code }}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Nama Lengkap</span>
+                        <span class="font-bold text-slate-800">{{ material.name }}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Kategori</span>
+                        <span class="font-medium text-slate-700">{{ material.category|default:"Umum" }}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Catatan / Spesifikasi</span>
+                        <p class="text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 mt-1 whitespace-pre-line">{{ material.notes|default:"Tidak ada catatan tambahan." }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Riwayat 10 Mutasi Terakhir -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h2 class="font-bold text-slate-900 text-sm">10 Transaksi Mutasi Terakhir</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Riwayat arus barang masuk (pembelian) dan keluar (pemakaian project/rusak) terkini.</p>
+            </div>
+            <a href="{% url 'raw_material_stock_card' material.uuid %}" class="px-3.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold rounded-xl flex items-center gap-1 transition">
+                <span>Buka Kartu Stok Lengkap</span>
+                <span>&rarr;</span>
+            </a>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                    <tr>
+                        <th class="px-4 py-3">Waktu</th>
+                        <th class="px-4 py-3">No. Referensi / Project</th>
+                        <th class="px-4 py-3 text-center">Tipe</th>
+                        <th class="px-4 py-3 text-right">Satuan Transaksi</th>
+                        <th class="px-4 py-3 text-right">Qty Mutasi</th>
+                        <th class="px-4 py-3 text-right">Saldo Berjalan</th>
+                        <th class="px-4 py-3 text-right">Harga Satuan</th>
+                        <th class="px-4 py-3">Keterangan</th>
+                        <th class="px-4 py-3 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for m in recent_mutations %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="px-4 py-3 font-mono text-slate-700 whitespace-nowrap">{{ m.created_at|date:"Y-m-d H:i" }}</td>
+                        <td class="px-4 py-3 font-mono font-medium text-slate-800">
+                            {{ m.reference_no|default:"-" }}
+                            {% if m.project %}
+                            <span class="block text-[10px] text-indigo-600">#{{ m.project.code }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            {% if m.mutation_type == 'IN' %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">IN</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">OUT</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono text-slate-700">
+                            {{ m.input_qty|rupiah }} {{ m.input_unit }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono font-bold {% if m.mutation_type == 'IN' %}text-emerald-600{% else %}text-rose-600{% endif %}">
+                            {% if m.mutation_type == 'IN' %}+{% else %}-{% endif %}{{ m.stock_qty|rupiah }} {{ material.stock_unit }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">
+                            {{ m.balance_after|rupiah }} {{ material.stock_unit }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono text-slate-700 whitespace-nowrap">
+                            {% if m.unit_price > 0 %}Rp {{ m.unit_price|rupiah }}{% else %}-{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-500 max-w-xs truncate" title="{{ m.notes }}">
+                            {{ m.notes|default:"-" }}
+                        </td>
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <a href="{% url 'raw_material_mutation_detail' m.uuid %}" class="text-[11px] bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 px-2.5 py-1 rounded font-semibold">
+                                Detail
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="px-4 py-8 text-center text-slate-400">
+                            Belum ada riwayat transaksi mutasi pada bahan baku ini.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT BAHAN BAKU (LAYOUT SAMA DENGAN TAMBAH BAHAN BAKU) -->
+    <div x-show="editModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="editModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-900 text-base">Edit Bahan Baku</h3>
+                <button @click="editModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form :action="'/raw-materials/' + currentMaterial.uuid + '/update/'" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'raw_material_detail' material.uuid %}">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kode Bahan (Opsional)</label>
+                        <input type="text" name="code" x-model="currentMaterial.code" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kategori</label>
+                        <input type="text" name="category" x-model="currentMaterial.category" placeholder="Logam, Kayu, Baut, dll" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Bahan Baku *</label>
+                    <input type="text" name="name" x-model="currentMaterial.name" required placeholder="Contoh: Besi Hollow 40x40x1.8mm" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">
+                            Satuan Dasar Stok (Gudang) *
+                            {% if material.mutations.exists %}
+                            <span class="text-[10px] text-amber-600 font-normal ml-1">(Terkunci)</span>
+                            {% endif %}
+                        </label>
+                        {% if material.mutations.exists %}
+                        <input type="text" name="stock_unit" value="{{ material.stock_unit }}" readonly class="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 cursor-not-allowed">
+                        <p class="text-[10px] text-slate-400 mt-0.5">Terkunci karena sudah memiliki riwayat mutasi stok.</p>
+                        {% else %}
+                        <select name="stock_unit" x-model="currentMaterial.stock_unit" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                            {% for u in unit_materials %}
+                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% empty %}
+                            <option value="pcs">Pieces (pcs)</option>
+                            <option value="batang">Batang (batang)</option>
+                            <option value="lembar">Lembar (lembar)</option>
+                            <option value="kg">Kilogram (kg)</option>
+                            <option value="meter">Meter (meter)</option>
+                            <option value="roll">Roll (roll)</option>
+                            <option value="kaleng">Kaleng (kaleng)</option>
+                            <option value="liter">Liter (liter)</option>
+                            <option value="dus">Dus (dus)</option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Harga Beli Terakhir / Satuan</label>
+                        <input type="number" step="0.01" name="last_purchase_price" x-model="currentMaterial.last_purchase_price" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Batas Minimum Stok</label>
+                    <input type="number" step="0.0001" name="minimum_stock" x-model="currentMaterial.minimum_stock" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                </div>
+
+                <!-- KONFIGURASI MULTI SATUAN KONVERSI (EDIT DINAMIS) -->
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="block font-bold text-slate-800 text-xs">Konfigurasi Multi-Satuan & Konversi (Opsional)</label>
+                            <p class="text-[11px] text-slate-500">Daftarkan satuan beli/kemasan lain yang otomatis terkonversi ke satuan <strong class="font-mono text-emerald-700 uppercase" x-text="currentMaterial.stock_unit"></strong>.</p>
+                        </div>
+                        <button type="button" @click="addEditConversion()" class="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-bold rounded-md flex items-center gap-1 shadow-sm">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            <span>+ Satuan</span>
+                        </button>
+                    </div>
+
+                    <template x-if="editConversions.length === 0">
+                        <div class="p-2 border border-dashed border-slate-300 rounded-lg text-center text-[11px] text-slate-400">
+                            Belum ada satuan tambahan. Klik <strong>+ Satuan</strong> jika bahan ini memiliki kemasan lain (misal: 1 DUS = 100 <span x-text="currentMaterial.stock_unit"></span>).
+                        </div>
+                    </template>
+
+                    <div class="space-y-2">
+                        <template x-for="(conv, index) in editConversions" :key="index">
+                            <div class="p-2.5 bg-white border border-slate-200 rounded-lg space-y-2 shadow-sm">
+                                <div class="grid grid-cols-12 gap-2 items-center">
+                                    <div class="col-span-5">
+                                        <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Satuan Alternatif *</label>
+                                        <select name="conv_unit_names[]" x-model="conv.unit_name" required class="w-full rounded border border-slate-300 p-1.5 text-xs font-semibold bg-white">
+                                            <option value="">-- Pilih Satuan --</option>
+                                            {% for u in unit_materials %}
+                                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-span-6">
+                                        <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Isi (1 Satuan = ... <span class="uppercase font-mono text-emerald-700" x-text="currentMaterial.stock_unit"></span>) *</label>
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" step="0.0001" name="conv_factors[]" x-model="conv.factor" required class="w-full rounded border border-slate-300 p-1.5 text-xs font-mono font-bold">
+                                            <span class="text-[10px] text-slate-500 font-mono uppercase whitespace-nowrap" x-text="currentMaterial.stock_unit"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-span-1 flex justify-end pt-3">
+                                        <button type="button" @click="removeEditConversion(index)" class="p-1 text-rose-500 hover:text-rose-700 rounded hover:bg-rose-50" title="Hapus baris">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <input type="text" name="conv_notes[]" x-model="conv.notes" placeholder="Catatan (Contoh: 1 Dus isi 100 pcs)" class="w-full rounded border border-slate-200 px-2 py-1 text-[11px] bg-slate-50">
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
+                    <textarea name="notes" x-model="currentMaterial.notes" rows="2" placeholder="Spesifikasi teknis, merek, supplier..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="editModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold shadow">Perbarui Bahan Baku</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

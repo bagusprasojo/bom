@@ -1,0 +1,284 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Detail Mutasi {{ mutation.reference_no|default:mutation.id }} - Sistem HPP{% endblock %}
+
+{% block content %}
+{% load l10n %}
+<div class="space-y-6" x-data="{
+    editModalOpen: false,
+    mutationType: '{{ mutation.mutation_type }}',
+    inputQty: {{ mutation.input_qty|unlocalize }},
+    inputUnit: '{{ mutation.input_unit|escapejs }}',
+    unitPrice: {{ mutation.unit_price|unlocalize }},
+    refNo: '{{ mutation.reference_no|escapejs }}',
+    notes: '{{ mutation.notes|escapejs }}'
+}">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'raw_material_stock_mutation_list' %}" class="hover:text-emerald-600 font-semibold">&larr; Kembali ke Daftar Mutasi</a>
+                <span>&rsaquo;</span>
+                <span class="font-mono text-slate-500">{{ mutation.reference_no|default:"Mutasi Stok" }}</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-black text-slate-900">Detail Transaksi Mutasi</h1>
+                {% if mutation.mutation_type == 'IN' %}
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    MASUK (IN) / PEMBELIAN
+                </span>
+                {% else %}
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                    KELUAR (OUT) / PEMAKAIAN
+                </span>
+                {% endif %}
+            </div>
+            <p class="text-xs text-slate-500 mt-1">Waktu Transaksi: {{ mutation.created_at|date:"Y-m-d H:i:s" }}</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="{% url 'raw_material_stock_mutation_list' %}" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                <span>Kembali</span>
+            </a>
+
+            {% if mutation.project %}
+            <!-- Jika dari Realisasi Project: Navigasi langsung ke edit Realisasi Project -->
+            <a href="{% url 'project_realization_detail' mutation.project.uuid %}" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                <span>Edit di Realisasi Project #{{ mutation.project.code }}</span>
+            </a>
+            {% else %}
+            <!-- Jika Mutasi Manual: Buka modal edit mutasi manual -->
+            <button @click="editModalOpen = true" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                <span>Edit Transaksi Mutasi</span>
+            </button>
+            <a href="{% url 'raw_material_mutation_delete' mutation.uuid %}" onclick="return confirm('Hapus transaksi mutasi ini? Saldo stok bahan baku akan di-rollback!');" class="px-3 py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-bold rounded-xl border border-rose-200 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span>Hapus & Rollback</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-4 rounded-xl text-xs font-semibold {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Metric Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Jumlah Transaksi</span>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-3xl font-black font-mono {% if mutation.mutation_type == 'IN' %}text-emerald-600{% else %}text-rose-600{% endif %}">
+                    {% if mutation.mutation_type == 'IN' %}+{% else %}-{% endif %}{{ mutation.input_qty|rupiah }}
+                </span>
+                <span class="text-sm font-bold uppercase text-slate-600 font-mono">{{ mutation.input_unit }}</span>
+            </div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Satuan input saat transaksi dicatat</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Konversi Stok Gudang</span>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-black font-mono text-slate-800">
+                    {{ mutation.stock_qty|rupiah }}
+                </span>
+                <span class="text-xs font-bold uppercase text-emerald-700 font-mono">{{ mutation.raw_material.stock_unit }}</span>
+            </div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Satuan dasar stok persediaan</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Harga / Nilai Transaksi</span>
+            <div class="mt-2">
+                <span class="text-2xl font-black font-mono text-slate-800">
+                    Rp {{ mutation.total_price|rupiah }}
+                </span>
+            </div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Rp {{ mutation.unit_price|rupiah }} / {{ mutation.input_unit }}</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Sisa Saldo Stok Akhir</span>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-black font-mono text-indigo-600">
+                    {{ mutation.balance_after|rupiah }}
+                </span>
+                <span class="text-xs font-bold uppercase text-slate-500 font-mono">{{ mutation.raw_material.stock_unit }}</span>
+            </div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Posisi saldo setelah mutasi ini</span>
+        </div>
+    </div>
+
+    <!-- 2 Column Section: Rincian Transaksi & Bahan Baku Terkait -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left 2 Cols: Rincian Data Transaksi -->
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <h2 class="font-bold text-slate-900 text-base pb-3 border-b border-slate-100">Informasi Mutasi</h2>
+
+            <div class="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                    <span class="text-slate-400 block text-[11px]">No. Referensi / Surat Jalan</span>
+                    <span class="font-mono font-bold text-slate-900 text-sm">{{ mutation.reference_no|default:"-" }}</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[11px]">Jenis / Arah Transaksi</span>
+                    <span class="font-bold text-slate-800">
+                        {% if mutation.mutation_type == 'IN' %}Penerimaan / Masuk Gudang (IN){% else %}Pengeluaran / Pemakaian (OUT){% endif %}
+                    </span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[11px]">Waktu Pencatatan</span>
+                    <span class="font-mono text-slate-700">{{ mutation.created_at|date:"Y-m-d H:i:s" }}</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[11px]">Asal / Sumber Transaksi</span>
+                    {% if mutation.project %}
+                    <a href="{% url 'project_realization_detail' mutation.project.uuid %}" class="inline-flex items-center gap-1 font-bold text-indigo-600 hover:underline">
+                        <span>Project: {{ mutation.project.name }} (#{{ mutation.project.code }})</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </a>
+                    {% else %}
+                    <span class="font-semibold text-slate-700">Input Mutasi Manual (Gudang)</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 text-xs">
+                <span class="text-slate-400 block text-[11px] mb-1">Catatan Transaksi</span>
+                <p class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 whitespace-pre-line">{{ mutation.notes|default:"Tidak ada catatan transaksi." }}</p>
+            </div>
+        </div>
+
+        <!-- Right 1 Col: Bahan Baku Terkait -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <h2 class="font-bold text-slate-900 text-base pb-3 border-b border-slate-100">Bahan Baku Terkait</h2>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <span class="text-slate-400 block text-[11px]">Kode Material</span>
+                    <span class="font-mono font-bold text-slate-800">#{{ mutation.raw_material.code }}</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[11px]">Nama Bahan</span>
+                    <a href="{% url 'raw_material_detail' mutation.raw_material.uuid %}" class="font-bold text-emerald-700 hover:underline text-sm block">
+                        {{ mutation.raw_material.name }}
+                    </a>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[11px]">Kategori</span>
+                    <span class="font-medium text-slate-700">{{ mutation.raw_material.category|default:"Umum" }}</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[11px]">Stok Gudang Saat Ini</span>
+                    <span class="font-mono font-bold text-slate-900">{{ mutation.raw_material.current_stock|rupiah }} {{ mutation.raw_material.stock_unit }}</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[11px]">Harga Beli Terakhir</span>
+                    <span class="font-mono text-slate-700">Rp {{ mutation.raw_material.last_purchase_price|rupiah }} / {{ mutation.raw_material.stock_unit }}</span>
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 space-y-2">
+                <a href="{% url 'raw_material_detail' mutation.raw_material.uuid %}" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition">
+                    <span>Lihat Profil Bahan Baku</span>
+                </a>
+                <a href="{% url 'raw_material_stock_card' mutation.raw_material.uuid %}" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition">
+                    <span>Lihat Kartu Stok Lengkap</span>
+                </a>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL EDIT MUTASI MANUAL (Hanya jika bukan dari Project) -->
+    {% if not mutation.project %}
+    <div x-show="editModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="editModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-900 text-base">Edit Transaksi Mutasi</h3>
+                <button @click="editModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form action="{% url 'raw_material_mutation_update' mutation.uuid %}" method="POST" class="space-y-3 text-xs">
+                {% csrf_token %}
+
+                <input type="hidden" name="mutation_type" value="{{ mutation.mutation_type }}">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Arah Transaksi</label>
+                        <div class="px-3 py-2 rounded-md border border-slate-200 bg-slate-50 font-bold text-xs flex items-center gap-2">
+                            {% if mutation.mutation_type == 'IN' %}
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span class="text-emerald-700">Barang Masuk / Pembelian (IN)</span>
+                            {% else %}
+                            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                            <span class="text-rose-700">Barang Rusak / Keluar (OUT)</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Bahan Baku</label>
+                        <input type="text" readonly disabled value="[{{ mutation.raw_material.code }}] {{ mutation.raw_material.name }}" class="w-full rounded-md border border-slate-200 px-3 py-2 text-xs bg-slate-100 font-bold text-slate-700">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jumlah Transaksi *</label>
+                        <input type="number" step="0.0001" name="input_qty" x-model.number="inputQty" value="{{ mutation.input_qty|unlocalize }}" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono font-bold focus:ring-emerald-500 focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan Transaksi *</label>
+                        <select name="input_unit" x-model="inputUnit" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                            <option value="{{ mutation.raw_material.stock_unit }}">Satuan Dasar ({{ mutation.raw_material.stock_unit }})</option>
+                            {% for conv in mutation.raw_material.conversions.all %}
+                            <option value="{{ conv.unit_name }}">{{ conv.unit_name }} (1 = {{ conv.conversion_factor|rupiah }} {{ mutation.raw_material.stock_unit }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid {% if mutation.mutation_type == 'IN' %}grid-cols-2{% else %}grid-cols-1{% endif %} gap-3">
+                    {% if mutation.mutation_type == 'IN' %}
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Harga Beli / Satuan (Rp) *</label>
+                        <input type="number" step="0.01" name="unit_price" x-model.number="unitPrice" value="{{ mutation.unit_price|unlocalize }}" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono font-bold focus:ring-emerald-500 focus:border-emerald-500">
+                    </div>
+                    {% else %}
+                    <input type="hidden" name="unit_price" value="0">
+                    {% endif %}
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">No. Referensi / Surat Jalan</label>
+                        <input type="text" name="reference_no" x-model="refNo" value="{{ mutation.reference_no }}" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan Mutasi</label>
+                    <textarea name="notes" x-model="notes" rows="2" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="editModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold shadow">Simpan Perubahan & Koreksi Stok</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

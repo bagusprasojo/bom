@@ -1,17 +1,10 @@
-﻿{% extends "hpp/base.html" %}
+{% extends "hpp/base.html" %}
 {% load custom_filters %}
 
 {% block title %}Mutasi Stok Bahan Baku - HPP & Manufaktur{% endblock %}
 
 {% block content %}
-<div class="space-y-6" x-data="{ 
-    mutationModalOpen: false, 
-    mutationType: 'IN',
-    selectedMat: '',
-    selectedUnit: '',
-    unitPrice: 0,
-    qty: 1
-}">
+<div class="space-y-6" x-data="mutationListApp()">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -40,30 +33,152 @@
     </div>
     {% endif %}
 
-    <!-- Filter Bar -->
-    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <form method="GET" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+    <!-- 4 Ringkasan KPI Log Mutasi -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
             <div>
-                <input type="text" name="q" value="{{ query }}" placeholder="Cari ref, catatan, nama bahan..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Total Mutasi</span>
+                <span class="text-lg sm:text-xl font-bold text-slate-800">{{ total_count }}</span>
+                <span class="text-[10px] text-slate-400 block">transaksi tercatat</span>
             </div>
+            <div class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+            </div>
+        </div>
+        <div class="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
             <div>
-                <select name="mat" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                    <option value="">-- Semua Bahan Baku --</option>
-                    {% for m in materials %}
-                    <option value="{{ m.uuid }}" {% if selected_mat == m.uuid|stringformat:"s" %}selected{% endif %}>{{ m.name }}</option>
-                    {% endfor %}
-                </select>
+                <span class="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider block">Barang Masuk (IN)</span>
+                <span class="text-lg sm:text-xl font-bold text-emerald-700">{{ total_in_count }}</span>
+                <span class="text-[10px] text-slate-400 block">penerimaan supplier</span>
             </div>
+            <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"></path></svg>
+            </div>
+        </div>
+        <div class="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
             <div>
-                <select name="type" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                    <option value="">-- Semua Tipe Mutasi --</option>
-                    <option value="IN" {% if selected_type == 'IN' %}selected{% endif %}>Stock Masuk (In)</option>
-                    <option value="OUT" {% if selected_type == 'OUT' %}selected{% endif %}>Stock Keluar (Out)</option>
-                </select>
+                <span class="text-[11px] font-semibold text-rose-600 uppercase tracking-wider block">Barang Keluar (OUT)</span>
+                <span class="text-lg sm:text-xl font-bold text-rose-700">{{ total_out_count }}</span>
+                <span class="text-[10px] text-slate-400 block">project & penyesuaian</span>
             </div>
-            <div class="flex items-center gap-2">
-                <button type="submit" class="w-full px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-md hover:bg-slate-700">Filter</button>
-                <a href="{% url 'raw_material_stock_mutation_list' %}" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-md hover:bg-slate-200">Reset</a>
+            <div class="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+            </div>
+        </div>
+        <div class="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+            <div>
+                <span class="text-[11px] font-semibold text-sky-600 uppercase tracking-wider block">Nilai Transaksi</span>
+                <span class="text-sm sm:text-base font-bold text-sky-800">Rp {{ total_val|rupiah }}</span>
+                <span class="text-[10px] text-slate-400 block">total periode ini</span>
+            </div>
+            <div class="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center text-sky-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar dengan Periode Tanggal -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <form method="GET" x-ref="filterForm" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <!-- Pencarian Teks -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Cari Transaksi</label>
+                    <input type="text" name="q" value="{{ query }}" placeholder="Ref, catatan, nama bahan..." class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <!-- Bahan Baku Autocomplete -->
+                <div class="relative" @click.outside="filterMatDropdown = false">
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Bahan Baku</label>
+                    <input type="hidden" name="mat" :value="filterSelectedMat">
+                    
+                    <div class="relative">
+                        <input type="text" 
+                               x-model="filterMatQuery" 
+                               @focus="filterMatDropdown = true" 
+                               @input="filterMatDropdown = true; if(!filterMatQuery) filterSelectedMat = '';"
+                               placeholder="Semua Bahan Baku..." 
+                               class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium focus:ring-emerald-500 focus:border-emerald-500 bg-white pr-7">
+                        
+                        <div class="absolute right-2 top-2 flex items-center gap-1">
+                            <button type="button" x-show="filterMatQuery" @click="clearFilterMaterial()" class="text-slate-400 hover:text-slate-600 text-xs font-bold leading-none cursor-pointer">&times;</button>
+                            <svg x-show="!filterMatQuery" class="w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+
+                    <!-- Dropdown List Hasil Autocomplete Filter -->
+                    <div x-show="filterMatDropdown" 
+                         class="absolute z-50 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl divide-y divide-slate-100" 
+                         style="display: none;">
+                        <!-- Pilihan Semua Bahan Baku -->
+                        <div @click="clearFilterMaterial()" 
+                             class="p-2 hover:bg-slate-50 cursor-pointer text-slate-600 font-medium text-xs flex items-center justify-between"
+                             :class="!filterSelectedMat ? 'bg-slate-50 font-bold text-slate-800' : ''">
+                            <span>-- Semua Bahan Baku --</span>
+                            <span x-show="!filterSelectedMat" class="text-emerald-600 font-bold">&check;</span>
+                        </div>
+
+                        <template x-for="item in filterFilteredMaterials" :key="item.uuid">
+                            <div @click="selectFilterMaterial(item)" 
+                                 class="p-2 hover:bg-emerald-50 cursor-pointer flex items-center justify-between transition text-xs"
+                                 :class="filterSelectedMat === item.uuid ? 'bg-emerald-50 text-emerald-900 font-bold' : ''">
+                                <div>
+                                    <span class="font-mono text-[10px] text-slate-400 block" x-text="'#' + item.code"></span>
+                                    <span class="text-slate-800 font-semibold" x-text="item.name"></span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="font-mono text-[11px] font-bold text-emerald-700 block" x-text="item.current_stock + ' ' + item.stock_unit"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="filterFilteredMaterials.length === 0" class="p-3 text-center text-xs text-slate-400">
+                            Tidak ada bahan baku yang cocok.
+                        </div>
+                    </div>
+                </div>
+                <!-- Tipe Mutasi -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tipe Mutasi</label>
+                    <select name="type" class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-emerald-500 focus:border-emerald-500">
+                        <option value="">-- Semua Tipe --</option>
+                        <option value="IN" {% if selected_type == 'IN' %}selected{% endif %}>Barang Masuk (In)</option>
+                        <option value="OUT" {% if selected_type == 'OUT' %}selected{% endif %}>Barang Keluar (Out)</option>
+                    </select>
+                </div>
+                <!-- Tanggal Mulai -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tanggal Mulai</label>
+                    <input type="date" name="start_date" x-ref="startDate" value="{{ start_date_str }}" class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <!-- Tanggal Selesai -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tanggal Selesai</label>
+                    <input type="date" name="end_date" x-ref="endDate" value="{{ end_date_str }}" class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+            </div>
+
+            <!-- Baris Pintas Periode & Tombol Aksi -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[11px] font-medium text-slate-400 mr-1">Pintas Periode:</span>
+                    <button type="button" @click="setToday()" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition cursor-pointer">Hari Ini</button>
+                    <button type="button" @click="setThisMonth()" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition cursor-pointer">Bulan Ini</button>
+                    {% if start_date_str or end_date_str or query or selected_mat or selected_type %}
+                    <a href="{% url 'raw_material_stock_mutation_list' %}" class="px-2.5 py-1 text-[11px] font-semibold bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-md transition ml-1">Reset Filter</a>
+                    {% endif %}
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <a href="{% url 'raw_material_mutation_export_excel' %}?{% if query %}q={{ query }}&{% endif %}{% if selected_mat %}mat={{ selected_mat }}&{% endif %}{% if selected_type %}type={{ selected_type }}&{% endif %}{% if start_date_str %}start_date={{ start_date_str }}&{% endif %}{% if end_date_str %}end_date={{ end_date_str }}{% endif %}" 
+                       class="px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold rounded-md shadow-xs flex items-center gap-1.5 transition" 
+                       title="Unduh log mutasi terfilter ke Excel">
+                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        <span>Export Excel</span>
+                    </a>
+                    <button type="submit" class="px-4 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-md hover:bg-slate-700 shadow-xs flex items-center gap-1.5 transition cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                        <span>Terapkan Filter</span>
+                    </button>
+                </div>
             </div>
         </form>
     </div>
@@ -81,6 +196,7 @@
                     <th class="px-4 py-3 text-right">Sisa Stok Akhir</th>
                     <th class="px-4 py-3">No. Referensi / Project</th>
                     <th class="px-4 py-3">Keterangan</th>
+                    <th class="px-4 py-3 text-center">Aksi</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
@@ -120,15 +236,53 @@
                         {% endif %}
                     </td>
                     <td class="px-4 py-3 text-slate-500">{{ mut.notes|default:"-" }}</td>
+                    <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                        <a href="{% url 'raw_material_mutation_detail' mut.uuid %}" class="inline-block text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded hover:bg-emerald-100 font-bold">
+                            Detail
+                        </a>
+                        {% if not mut.project %}
+                        <a href="{% url 'raw_material_mutation_delete' mut.uuid %}" onclick="return confirm('Hapus transaksi mutasi ini? Stok akan di-rollback!');" class="inline-block text-[11px] text-rose-600 hover:text-rose-800 font-semibold px-1">
+                            Hapus
+                        </a>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="8" class="px-4 py-8 text-center text-slate-400">Belum ada riwayat transaksi mutasi bahan baku.</td>
+                    <td colspan="9" class="px-4 py-8 text-center text-slate-400">Belum ada riwayat transaksi mutasi bahan baku.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    <!-- Pagination Navigation -->
+    {% if mutations.has_other_pages %}
+    <div class="bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+        <div class="text-slate-500 font-medium">
+            Menampilkan halaman <strong class="text-slate-800">{{ mutations.number }}</strong> dari <strong class="text-slate-800">{{ mutations.paginator.num_pages }}</strong> (Total {{ mutations.paginator.count }} data)
+        </div>
+        <div class="inline-flex items-center gap-1 font-semibold">
+            {% if mutations.has_previous %}
+            <a href="?page=1{% if query %}&q={{ query }}{% endif %}{% if selected_mat %}&mat={{ selected_mat }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition" title="Halaman Pertama">&laquo;</a>
+            <a href="?page={{ mutations.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if selected_mat %}&mat={{ selected_mat }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}" class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition">Sebelumnya</a>
+            {% else %}
+            <span class="px-3 py-1.5 rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed">Sebelumnya</span>
+            {% endif %}
+
+            <span class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-bold">
+                {{ mutations.number }}
+            </span>
+
+            {% if mutations.has_next %}
+            <a href="?page={{ mutations.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if selected_mat %}&mat={{ selected_mat }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}" class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition">Berikutnya</a>
+            <a href="?page={{ mutations.paginator.num_pages }}{% if query %}&q={{ query }}{% endif %}{% if selected_mat %}&mat={{ selected_mat }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition" title="Halaman Terakhir">&raquo;</a>
+            {% else %}
+            <span class="px-3 py-1.5 rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed">Berikutnya</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- MODAL CATAT MUTASI -->
     <div x-show="mutationModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
@@ -154,22 +308,57 @@
                     </div>
                 </div>
 
-                <div>
+                <!-- Autocomplete Pilih Bahan Baku -->
+                <div class="relative" @click.outside="showDropdown = false">
                     <label class="block font-semibold text-slate-700 mb-1">Pilih Bahan Baku *</label>
-                    <select name="material_uuid" required x-model="selectedMat" @change="
-                        let opt = $event.target.selectedOptions[0];
-                        if (opt && opt.value) {
-                            selectedUnit = opt.getAttribute('data-unit') || '';
-                            unitPrice = opt.getAttribute('data-price') || 0;
-                        }
-                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                        <option value="">-- Pilih Bahan Baku --</option>
-                        {% for m in materials %}
-                        <option value="{{ m.uuid }}" data-unit="{{ m.stock_unit }}" data-price="{{ m.last_purchase_price }}">
-                            [{{ m.code }}] {{ m.name }} (Stok: {{ m.current_stock|rupiah }} {{ m.stock_unit }})
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <input type="hidden" name="material_uuid" :value="selectedMat" required>
+                    
+                    <div class="relative">
+                        <input type="text" 
+                               x-model="searchQuery" 
+                               @focus="showDropdown = true" 
+                               @input="showDropdown = true; if(!searchQuery) resetSelection();"
+                               placeholder="Ketik kode atau nama bahan baku..." 
+                               class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs focus:ring-emerald-500 focus:border-emerald-500 font-semibold bg-white pr-8">
+                        
+                        <div class="absolute right-2.5 top-2.5 flex items-center gap-1">
+                            <button type="button" x-show="selectedMat" @click="resetSelection()" class="text-slate-400 hover:text-slate-600 text-xs font-bold">&times;</button>
+                            <svg class="w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                    </div>
+
+                    <!-- Dropdown List Hasil Autocomplete -->
+                    <div x-show="showDropdown" 
+                         class="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl divide-y divide-slate-100" 
+                         style="display: none;">
+                        <template x-for="item in filteredMaterials" :key="item.uuid">
+                            <div @click="selectMaterial(item)" 
+                                 class="p-2.5 hover:bg-emerald-50 cursor-pointer flex items-center justify-between transition">
+                                <div>
+                                    <span class="font-mono text-[10px] text-slate-400 block" x-text="'#' + item.code"></span>
+                                    <span class="font-bold text-slate-800 text-xs" x-text="item.name"></span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-[11px] font-mono font-semibold text-slate-600" x-text="'Stok: ' + item.current_stock + ' ' + item.stock_unit"></span>
+                                    <span x-show="item.conversions && item.conversions.length > 0" class="block text-[10px] text-emerald-600 font-bold" x-text="'+ ' + item.conversions.length + ' Satuan Konversi'"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="filteredMaterials.length === 0" class="p-3 text-center text-slate-400 text-xs">
+                            Bahan baku tidak ditemukan.
+                        </div>
+                    </div>
+
+                    <!-- Keterangan Item Terpilih -->
+                    <template x-if="selectedMatObj">
+                        <div class="mt-1.5 p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-[11px] text-emerald-800">
+                            <div>
+                                Satuan Dasar: <strong class="font-mono uppercase" x-text="selectedMatObj.stock_unit"></strong>
+                                &bull; Stok Tersedia: <strong class="font-mono" x-text="selectedMatObj.current_stock + ' ' + selectedMatObj.stock_unit"></strong>
+                            </div>
+                            <span class="font-mono text-[10px] text-emerald-700 font-bold">Harga Terakhir: Rp <span x-text="selectedMatObj.last_price"></span></span>
+                        </div>
+                    </template>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -178,8 +367,15 @@
                         <input type="number" step="0.0001" name="input_qty" x-model="qty" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono font-bold">
                     </div>
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Satuan Transaksi</label>
-                        <input type="text" name="input_unit" x-model="selectedUnit" placeholder="pcs, dus, batang..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan Transaksi *</label>
+                        <select name="input_unit" x-model="selectedUnit" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                            <template x-for="u in availableUnits" :key="u.name">
+                                <option :value="u.name" x-text="u.label"></option>
+                            </template>
+                            <template x-if="availableUnits.length === 0">
+                                <option value="">-- Pilih bahan baku terlebih dahulu --</option>
+                            </template>
+                        </select>
                     </div>
                 </div>
 
@@ -207,4 +403,116 @@
         </div>
     </div>
 </div>
+
+<script>
+function mutationListApp() {
+    const materialsData = {{ materials_json|safe }};
+    return {
+        // Modal state
+        mutationModalOpen: false,
+        mutationType: 'IN',
+        materialsList: materialsData,
+        selectedMat: '',
+        selectedMatObj: null,
+        searchQuery: '',
+        showDropdown: false,
+        availableUnits: [],
+        selectedUnit: '',
+        unitPrice: 0,
+        qty: 1,
+
+        get filteredMaterials() {
+            if (!this.searchQuery) return this.materialsList;
+            const q = this.searchQuery.toLowerCase();
+            return this.materialsList.filter(m => 
+                m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q)
+            );
+        },
+        selectMaterial(m) {
+            this.selectedMat = m.uuid;
+            this.selectedMatObj = m;
+            this.searchQuery = '[' + m.code + '] ' + m.name;
+            this.showDropdown = false;
+            
+            let units = [
+                { name: m.stock_unit, label: m.stock_unit + ' (Satuan Dasar)', factor: 1 }
+            ];
+            if (m.conversions && m.conversions.length > 0) {
+                m.conversions.forEach(c => {
+                    units.push({
+                        name: c.unit_name,
+                        label: c.unit_name + ' (1 = ' + c.factor + ' ' + m.stock_unit + ')',
+                        factor: c.factor
+                    });
+                });
+            }
+            this.availableUnits = units;
+            this.selectedUnit = m.stock_unit;
+            this.unitPrice = m.last_price;
+        },
+        resetSelection() {
+            this.selectedMat = '';
+            this.selectedMatObj = null;
+            this.searchQuery = '';
+            this.availableUnits = [];
+            this.selectedUnit = '';
+            this.unitPrice = 0;
+        },
+
+        // Filter Bar Autocomplete state
+        filterSelectedMat: '{{ selected_mat|default:'' }}',
+        filterMatQuery: '{% if selected_mat_obj %}[{{ selected_mat_obj.code|escapejs }}] {{ selected_mat_obj.name|escapejs }}{% endif %}',
+        filterMatDropdown: false,
+
+        get filterFilteredMaterials() {
+            if (!this.filterMatQuery) return this.materialsList;
+            const q = this.filterMatQuery.toLowerCase();
+            return this.materialsList.filter(m => 
+                m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q)
+            );
+        },
+        selectFilterMaterial(m) {
+            this.filterSelectedMat = m.uuid;
+            this.filterMatQuery = '[' + m.code + '] ' + m.name;
+            this.filterMatDropdown = false;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        },
+        clearFilterMaterial() {
+            this.filterSelectedMat = '';
+            this.filterMatQuery = '';
+            this.filterMatDropdown = false;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        },
+
+        // Shortcut Periode Tanggal
+        setToday() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const today = `${y}-${m}-${d}`;
+            this.$refs.startDate.value = today;
+            this.$refs.endDate.value = today;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        },
+        setThisMonth() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            this.$refs.startDate.value = `${y}-${m}-01`;
+            this.$refs.endDate.value = `${y}-${m}-${d}`;
+            this.$nextTick(() => {
+                this.$refs.filterForm.submit();
+            });
+        }
+    };
+}
+</script>
 {% endblock %}

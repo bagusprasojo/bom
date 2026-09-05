@@ -480,10 +480,8 @@ class BOMItemRealization(models.Model):
                 base_qty = self.qty * factor
                 rm.current_stock -= base_qty
 
-                # Update harga terakhir per stock_unit jika diinput
-                if self.unit_cost > 0:
-                    unit_price_base = self.unit_cost / factor
-                    rm.last_purchase_price = unit_price_base
+                # CATATAN: last_purchase_price tidak diubah pada saat pemakaian project (OUT).
+                # last_purchase_price hanya mencerminkan harga beli aktual dari supplier pada transaksi masuk (IN).
 
                 rm.save()
 

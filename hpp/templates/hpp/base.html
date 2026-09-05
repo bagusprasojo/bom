@@ -118,7 +118,7 @@
                     <div x-show="materialTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
                         <a href="{% url 'raw_material_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/raw-materials/' %}text-teal-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
-                            <span>Stok Bahan Baku</span>
+                            <span>Daftar Bahan Baku</span>
                         </a>
                         <a href="{% url 'raw_material_stock_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/raw-materials/mutations/' in request.path %}text-teal-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>

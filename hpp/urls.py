@@ -26,14 +26,21 @@ urlpatterns = [
 
     # Bahan Baku (Raw Material) & Multi-Satuan
     path("raw-materials/", views_raw_material.raw_material_list, name="raw_material_list"),
+    path("raw-materials/export/", views_raw_material.raw_material_export_excel, name="raw_material_export_excel"),
     path("raw-materials/new/", views_raw_material.raw_material_create, name="raw_material_create"),
+    path("raw-materials/<uuid:uuid>/", views_raw_material.raw_material_detail, name="raw_material_detail"),
     path("raw-materials/<uuid:uuid>/update/", views_raw_material.raw_material_update, name="raw_material_update"),
     path("raw-materials/<uuid:uuid>/delete/", views_raw_material.raw_material_delete, name="raw_material_delete"),
     path("raw-materials/<uuid:material_uuid>/conversions/add/", views_raw_material.raw_material_conversion_add, name="raw_material_conversion_add"),
     path("raw-materials/conversions/<uuid:uuid>/delete/", views_raw_material.raw_material_conversion_delete, name="raw_material_conversion_delete"),
     path("raw-materials/mutations/", views_raw_material.raw_material_stock_mutation_list, name="raw_material_stock_mutation_list"),
+    path("raw-materials/mutations/export/", views_raw_material.raw_material_mutation_export_excel, name="raw_material_mutation_export_excel"),
     path("raw-materials/mutations/new/", views_raw_material.raw_material_mutation_create, name="raw_material_mutation_create"),
+    path("raw-materials/mutations/<uuid:uuid>/", views_raw_material.raw_material_mutation_detail, name="raw_material_mutation_detail"),
+    path("raw-materials/mutations/<uuid:uuid>/update/", views_raw_material.raw_material_mutation_update, name="raw_material_mutation_update"),
+    path("raw-materials/mutations/<uuid:uuid>/delete/", views_raw_material.raw_material_mutation_delete, name="raw_material_mutation_delete"),
     path("raw-materials/cards/", views_raw_material.raw_material_stock_card_index, name="raw_material_stock_card_index"),
+    path("raw-materials/cards/export/", views_raw_material.raw_material_stock_card_export_excel, name="raw_material_stock_card_export_excel"),
     path("raw-materials/<uuid:uuid>/card/", views_raw_material.raw_material_stock_card, name="raw_material_stock_card"),
 
     # Realisasi Project Bertahap
