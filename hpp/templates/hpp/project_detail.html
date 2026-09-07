@@ -798,92 +798,200 @@
     </div>
 
     <!-- MODAL: Add Labor -->
-    <div x-show="addLaborModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div @click.away="addLaborModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4" x-data="{ roleInput: '', unitInput: 'jam', rateInput: 0 }">
-            <h3 class="text-lg font-bold text-slate-900">Tambah Biaya Tenaga Kerja</h3>
-            <form action="{% url 'labor_add' project.uuid %}" method="POST" class="space-y-3">
+    <div x-show="addLaborModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="addLaborModal = false" 
+             x-data="laborAddModalController()"
+             class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 bg-indigo-50 text-indigo-700 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                    </span>
+                    <h3 class="text-base font-bold text-slate-900">Tambah Biaya Tenaga Kerja</h3>
+                </div>
+                <button type="button" @click="addLaborModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form action="{% url 'labor_add' project.uuid %}" method="POST" class="space-y-4">
                 {% csrf_token %}
+
+                <!-- Role / Peran with Autocomplete Combobox -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Peran / Posisi Kerja *
+                        </label>
+                        <span class="text-[11px] text-slate-400 font-normal">Ketik bebas atau pilih dari master</span>
+                    </div>
+
+                    <div class="relative" @click.outside="roleDropdownOpen = false">
+                        <div class="relative">
+                            <input type="text" 
+                                   name="role_name"
+                                   x-model="searchRole"
+                                   @focus="roleDropdownOpen = true"
+                                   @input="roleName = searchRole; selectedLabor = null; roleDropdownOpen = true"
+                                   required
+                                   placeholder="Contoh: Tukang Las, Finishing Melamik, Operator CNC..."
+                                   class="w-full rounded-lg border border-slate-300 pl-3.5 pr-16 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition placeholder-slate-400">
+
+                            <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+                                <button type="button" 
+                                        x-show="searchRole" 
+                                        @click="clearLabor()" 
+                                        class="p-1 text-slate-400 hover:text-slate-600 transition"
+                                        title="Hapus">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                                <button type="button" 
+                                        @click="roleDropdownOpen = !roleDropdownOpen" 
+                                        class="p-1 text-slate-400 hover:text-slate-600 transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Dropdown options -->
+                        <div x-show="roleDropdownOpen" 
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             class="absolute z-30 mt-1.5 w-full bg-white rounded-xl shadow-xl border border-slate-200 max-h-56 overflow-y-auto divide-y divide-slate-100"
+                             style="display: none;">
+                            <template x-for="l in filteredLabors" :key="l.uuid">
+                                <div @click="selectLabor(l)" 
+                                     class="p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between transition group"
+                                     :class="selectedLabor && selectedLabor.uuid === l.uuid ? 'bg-indigo-50 font-semibold' : ''">
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-800 group-hover:text-indigo-900" x-text="l.role_name"></div>
+                                        <div class="text-xs text-slate-500 mt-0.5">Satuan: <span class="font-semibold" x-text="l.unit"></span></div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-xs font-bold text-emerald-600" x-text="formatRupiah(l.standard_rate) + ' / ' + l.unit"></div>
+                                        <div class="text-[10px] text-slate-400">Tarif Standar</div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="filteredLabors.length === 0" class="p-3 text-center text-xs text-slate-400">
+                                Peran tidak ditemukan di master. Anda dapat mengetik peran baru secara bebas.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Satuan -->
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Pilih Master (Opsional)</label>
-                    <select class="w-full rounded border border-slate-300 p-2 text-sm"
-                            @change="if($event.target.value){
-                                let opt = $event.target.options[$event.target.selectedIndex];
-                                roleInput = opt.dataset.role;
-                                unitInput = opt.dataset.unit;
-                                rateInput = opt.dataset.rate;
-                            }">
-                        <option value="">-- Ketik Bebas / Pilih Master --</option>
-                        {% for lm in master_labors %}
-                        <option value="{{ lm.id }}" data-role="{{ lm.role_name }}" data-unit="{{ lm.unit }}" data-rate="{{ lm.standard_rate }}">{{ lm.role_name }} ({{ lm.unit }})</option>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Satuan Kerja *</label>
+                    <select name="unit" x-model="unit" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+                        {% for u in unit_labors %}
+                        <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                        {% empty %}
+                        <option value="jam">Jam (jam)</option>
+                        <option value="hari">Hari (hari)</option>
+                        <option value="mandays">Mandays (mandays)</option>
+                        <option value="titik">Titik (titik)</option>
+                        <option value="bulan">Bulan (bulan)</option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <div class="grid grid-cols-3 gap-2">
-                    <div class="col-span-2">
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Peran / Pekerjaan *</label>
-                        <input type="text" name="role_name" x-model="roleInput" required placeholder="Tukang Las / Finishing" class="w-full rounded border border-slate-300 p-2 text-sm">
+                <!-- Estimasi Kuantitas & Tarif Satuan + Live Subtotal -->
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Estimasi Waktu & Tarif</span>
+                        <div class="text-right">
+                            <span class="text-[11px] text-slate-500">Estimasi Subtotal:</span>
+                            <span class="text-sm font-bold text-indigo-700 font-mono ml-1" x-text="formatRupiah(subtotal)"></span>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
-                        <select name="unit" x-model="unitInput" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
-                            {% for u in unit_labors %}
-                            <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
-                            {% empty %}
-                            <option value="jam">Jam (jam)</option>
-                            <option value="hari">Hari (hari)</option>
-                            <option value="mandays">Mandays (mandays)</option>
-                            <option value="titik">Titik (titik)</option>
-                            <option value="bulan">Bulan (bulan)</option>
-                            {% endfor %}
-                        </select>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Volume / Kuantitas</label>
+                            <input type="number" step="0.01" min="0" name="est_quantity" x-model.number="estQuantity" 
+                                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tarif Satuan (Rp)</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-xs">Rp</span>
+                                <input type="number" step="1" min="0" name="est_rate" x-model.number="estRate" 
+                                       class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Est. Kuantitas/Jam</label>
-                        <input type="number" step="0.01" name="est_quantity" value="1" class="w-full rounded border border-slate-300 p-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Est. Tarif (Rp)</label>
-                        <input type="number" step="0.01" name="est_rate" x-model="rateInput" class="w-full rounded border border-slate-300 p-2 text-sm">
-                    </div>
+                <!-- Catatan -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Catatan Pekerjaan</label>
+                    <input type="text" name="notes" x-model="notes" placeholder="Contoh: Estimasi 2 orang tukang finishing 4 hari kerja" 
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Real. Kuantitas/Jam</label>
-                        <input type="number" step="0.01" name="act_quantity" value="0" class="w-full rounded border border-slate-300 p-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Real. Tarif (Rp)</label>
-                        <input type="number" step="0.01" name="act_rate" value="0" class="w-full rounded border border-slate-300 p-2 text-sm">
-                    </div>
-                </div>
-
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" @click="addLaborModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan</button>
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="addLaborModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow transition">
+                        Simpan ke Tenaga Kerja
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- MODAL: Edit Labor -->
-    <div x-show="editLaborModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div @click.away="editLaborModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
-            <h3 class="text-lg font-bold text-slate-900">Edit Biaya Tenaga Kerja</h3>
-            <form :action="'/labor/' + currentLabor.id + '/update/'" method="POST" class="space-y-3">
+    <div x-show="editLaborModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="editLaborModal = false" class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Edit Biaya Tenaga Kerja</h3>
+                <button type="button" @click="editLaborModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form :action="'/labor/' + currentLabor.id + '/update/'" method="POST" class="space-y-4">
                 {% csrf_token %}
-                <div class="grid grid-cols-3 gap-2">
+                <div class="grid grid-cols-3 gap-3">
                     <div class="col-span-2">
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Peran / Pekerjaan *</label>
-                        <input type="text" name="role_name" x-model="currentLabor.role_name" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Peran / Pekerjaan *</label>
+                        <input type="text" name="role_name" x-model="currentLabor.role_name" required class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-semibold">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
-                        <select name="unit" x-model="currentLabor.unit" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Satuan</label>
+                        <select name="unit" x-model="currentLabor.unit" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
                             {% for u in unit_labors %}
                             <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
                             {% empty %}
@@ -897,164 +1005,396 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Est. Kuantitas/Jam</label>
-                        <input type="number" step="0.01" name="est_quantity" x-model="currentLabor.est_quantity" class="w-full rounded border border-slate-300 p-2 text-sm">
+                <!-- Estimasi Subtotal Live Box -->
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Estimasi Waktu & Tarif</span>
+                        <div class="text-right">
+                            <span class="text-[11px] text-slate-500">Estimasi Subtotal:</span>
+                            <span class="text-sm font-bold text-indigo-700 font-mono ml-1" 
+                                  x-text="'Rp ' + Math.round((parseFloat(currentLabor.est_quantity) || 0) * (parseFloat(currentLabor.est_rate) || 0)).toLocaleString('id-ID')"></span>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Est. Tarif (Rp)</label>
-                        <input type="number" step="0.01" name="est_rate" x-model="currentLabor.est_rate" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Est. Kuantitas</label>
+                            <input type="number" step="0.01" name="est_quantity" x-model="currentLabor.est_quantity" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Est. Tarif (Rp)</label>
+                            <input type="number" step="1" name="est_rate" x-model="currentLabor.est_rate" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold">
+                        </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Real. Kuantitas/Jam</label>
-                        <input type="number" step="0.01" name="act_quantity" x-model="currentLabor.act_quantity" class="w-full rounded border border-slate-300 p-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Real. Tarif (Rp)</label>
-                        <input type="number" step="0.01" name="act_rate" x-model="currentLabor.act_rate" class="w-full rounded border border-slate-300 p-2 text-sm">
-                    </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Catatan</label>
+                    <input type="text" name="notes" x-model="currentLabor.notes" class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm">
                 </div>
 
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" @click="editLaborModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update</button>
+                <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="editLaborModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition">Batal</button>
+                    <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition">Update Data</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- MODAL: Add Project Finished Good -->
-    <div x-show="addFgModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div @click.away="addFgModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4" x-data="{ selectedFgCost: 0 }">
-            <h3 class="text-lg font-bold text-slate-900">Tambah Barang Jadi ke Project</h3>
-            <form action="{% url 'project_fg_add' project.uuid %}" method="POST" class="space-y-3">
-                {% csrf_token %}
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Pilih Master Barang Jadi *</label>
-                    <select name="finished_good_uuid" required class="w-full rounded border border-slate-300 p-2 text-sm"
-                            @change="if($event.target.value){
-                                let opt = $event.target.options[$event.target.selectedIndex];
-                                selectedFgCost = opt.dataset.cost;
-                            }">
-                        <option value="">-- Pilih Barang Jadi --</option>
-                        {% for fg in master_finished_goods %}
-                        <option value="{{ fg.uuid }}" data-cost="{{ fg.standard_cost }}">
-                            [{{ fg.sku }}] {{ fg.name }} (Stock: {{ fg.current_stock|rupiah }} {{ fg.unit }})
-                        </option>
-                        {% endfor %}
-                    </select>
+    <div x-show="addFgModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="addFgModal = false" 
+             x-data="fgAddModalController()"
+             class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 bg-purple-50 text-purple-700 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                        </svg>
+                    </span>
+                    <h3 class="text-base font-bold text-slate-900">Tambah Barang Jadi ke Project</h3>
                 </div>
+                <button type="button" @click="addFgModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
 
-                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                    <span class="text-xs font-bold text-slate-700">Estimasi Kebutuhan</span>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-[11px] text-slate-500">Estimasi Jumlah</label>
-                            <input type="number" step="0.01" name="est_qty" value="1" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+            <form action="{% url 'project_fg_add' project.uuid %}" method="POST" class="space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="finished_good_uuid" :value="fgUuid">
+
+                <!-- Autocomplete Finished Good Combobox -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Pilih Barang Jadi *
+                        </label>
+                        <a href="{% url 'finished_good_list' %}" target="_blank" class="text-[11px] font-bold text-indigo-600 hover:underline">
+                            + Master Barang Jadi
+                        </a>
+                    </div>
+
+                    <div class="relative" @click.outside="fgDropdownOpen = false">
+                        <div class="relative">
+                            <input type="text" 
+                                   x-model="searchFg"
+                                   @focus="fgDropdownOpen = true"
+                                   @input="fgUuid = ''; selectedFg = null; fgDropdownOpen = true"
+                                   required
+                                   placeholder="Ketik nama, SKU, atau kategori barang jadi..."
+                                   class="w-full rounded-lg border border-slate-300 pl-3.5 pr-16 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition placeholder-slate-400">
+
+                            <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+                                <button type="button" 
+                                        x-show="searchFg" 
+                                        @click="clearFg()" 
+                                        class="p-1 text-slate-400 hover:text-slate-600 transition"
+                                        title="Hapus">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                                <button type="button" 
+                                        @click="fgDropdownOpen = !fgDropdownOpen" 
+                                        class="p-1 text-slate-400 hover:text-slate-600 transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-[11px] text-slate-500">Est. Cost Satuan (Rp)</label>
-                            <input type="number" step="0.01" name="est_unit_cost" x-model="selectedFgCost" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+
+                        <!-- Dropdown options -->
+                        <div x-show="fgDropdownOpen" 
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             class="absolute z-30 mt-1.5 w-full bg-white rounded-xl shadow-xl border border-slate-200 max-h-56 overflow-y-auto divide-y divide-slate-100"
+                             style="display: none;">
+                            <template x-for="fg in filteredFinishedGoods" :key="fg.uuid">
+                                <div @click="selectFg(fg)" 
+                                     class="p-2.5 hover:bg-purple-50/80 cursor-pointer flex items-center justify-between transition group"
+                                     :class="fgUuid === fg.uuid ? 'bg-purple-50 font-semibold' : ''">
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-800 group-hover:text-purple-900" x-text="fg.name"></div>
+                                        <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                            <span class="font-mono bg-slate-100 px-1.5 py-0.2 rounded" x-text="'#' + fg.sku"></span>
+                                            <span x-text="fg.category"></span>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-xs font-bold text-slate-800" x-text="'Stok: ' + fg.current_stock + ' ' + fg.unit"></div>
+                                        <div class="text-[11px] text-purple-600 font-semibold" x-text="formatRupiah(fg.standard_cost) + ' / ' + fg.unit"></div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="filteredFinishedGoods.length === 0" class="p-3 text-center text-xs text-slate-400">
+                                Barang jadi tidak ditemukan.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Real-time Stock Card & Warning Indicator -->
+                    <div x-show="selectedFg" class="mt-2 p-3 bg-purple-50/70 rounded-xl border border-purple-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 text-xs text-purple-950 font-medium">
+                            <svg class="w-4 h-4 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span>Gudang: <strong x-text="selectedFg ? (selectedFg.current_stock + ' ' + selectedFg.unit) : ''"></strong> | Standard Cost: <strong x-text="selectedFg ? formatRupiah(selectedFg.standard_cost) : ''"></strong></span>
+                        </div>
+                        <div x-show="selectedFg && estQty > selectedFg.current_stock" class="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                            ⚠️ Melebihi stok saat ini
                         </div>
                     </div>
                 </div>
 
-                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
-                    <input type="text" name="notes" placeholder="Catatan part barang jadi..." class="w-full rounded border border-slate-300 p-2 text-sm">
+                <!-- Estimasi Kebutuhan & Live Subtotal -->
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Estimasi Kebutuhan</span>
+                        <div class="text-right">
+                            <span class="text-[11px] text-slate-500">Estimasi Subtotal:</span>
+                            <span class="text-sm font-bold text-purple-700 font-mono ml-1" x-text="formatRupiah(subtotal)"></span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Kuantitas Estimasi</label>
+                            <input type="number" step="0.01" min="0" name="est_qty" x-model.number="estQty" 
+                                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Standard Cost Satuan (Rp)</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-xs">Rp</span>
+                                <input type="number" step="1" min="0" name="est_unit_cost" x-model.number="estUnitCost" 
+                                       class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" @click="addFgModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan ke Project</button>
+                <!-- Catatan -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Catatan</label>
+                    <input type="text" name="notes" x-model="notes" placeholder="Catatan part atau perakitan..." 
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="addFgModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow transition">
+                        Simpan ke Project
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- MODAL: Edit Project Finished Good -->
-    <div x-show="editFgModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div @click.away="editFgModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
-            <h3 class="text-lg font-bold text-slate-900">Edit Barang Jadi di Project</h3>
-            <p class="text-xs text-slate-500">Barang: <strong x-text="currentProjectFg.name" class="text-slate-800"></strong></p>
-            <form :action="'/project-fg/' + currentProjectFg.uuid + '/update/'" method="POST" class="space-y-3">
+    <div x-show="editFgModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="editFgModal = false" class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Edit Barang Jadi di Project</h3>
+                <button type="button" @click="editFgModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <p class="text-xs text-slate-500">Item: <strong x-text="currentProjectFg.name" class="text-slate-800 font-bold"></strong></p>
+
+            <form :action="'/project-fg/' + currentProjectFg.uuid + '/update/'" method="POST" class="space-y-4">
                 {% csrf_token %}
-                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                    <span class="text-xs font-bold text-slate-700">Estimasi Kebutuhan</span>
-                    <div class="grid grid-cols-2 gap-2">
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Estimasi Kebutuhan</span>
+                        <div class="text-right">
+                            <span class="text-[11px] text-slate-500">Subtotal:</span>
+                            <span class="text-sm font-bold text-purple-700 font-mono ml-1" 
+                                  x-text="'Rp ' + Math.round((parseFloat(currentProjectFg.est_qty) || 0) * (parseFloat(currentProjectFg.est_unit_cost) || 0)).toLocaleString('id-ID')"></span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-[11px] text-slate-500">Estimasi Jumlah</label>
-                            <input type="number" step="0.01" name="est_qty" x-model="currentProjectFg.est_qty" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Kuantitas Estimasi</label>
+                            <input type="number" step="0.01" name="est_qty" x-model="currentProjectFg.est_qty" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold">
                         </div>
                         <div>
-                            <label class="block text-[11px] text-slate-500">Est. Cost Satuan (Rp)</label>
-                            <input type="number" step="0.01" name="est_unit_cost" x-model="currentProjectFg.est_unit_cost" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Standard Cost (Rp)</label>
+                            <input type="number" step="1" name="est_unit_cost" x-model="currentProjectFg.est_unit_cost" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold">
                         </div>
                     </div>
                 </div>
 
-                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
-                    <input type="text" name="notes" x-model="currentProjectFg.notes" class="w-full rounded border border-slate-300 p-2 text-sm">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Catatan</label>
+                    <input type="text" name="notes" x-model="currentProjectFg.notes" class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm">
                 </div>
 
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" @click="editFgModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update</button>
+                <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="editFgModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition">Batal</button>
+                    <button type="submit" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow transition">Update Data</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- MODAL: Add Overhead -->
-    <div x-show="addOverheadModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div @click.away="addOverheadModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
-            <h3 class="text-lg font-bold text-slate-900">Tambah Biaya Overhead</h3>
-            <form action="{% url 'overhead_add' project.uuid %}" method="POST" class="space-y-3">
+    <div x-show="addOverheadModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="addOverheadModal = false" 
+             x-data="overheadAddModalController()"
+             class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 bg-amber-50 text-amber-700 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                    </span>
+                    <h3 class="text-base font-bold text-slate-900">Tambah Biaya Overhead & Lainnya</h3>
+                </div>
+                <button type="button" @click="addOverheadModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form action="{% url 'overhead_add' project.uuid %}" method="POST" class="space-y-4">
                 {% csrf_token %}
+
+                <!-- Quick Category Presets Chips -->
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Deskripsi Biaya *</label>
-                    <input type="text" name="name" required placeholder="Sewa Alat / Ongkos Kirim / Konsumsi" class="w-full rounded border border-slate-300 p-2 text-sm">
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Estimasi Biaya (Rp)</label>
-                        <input type="number" step="0.01" name="est_cost" value="0" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Preset Kategori Populer</label>
+                    <div class="flex flex-wrap gap-1.5">
+                        <template x-for="p in presets" :key="p">
+                            <button type="button" 
+                                    @click="setPreset(p)" 
+                                    class="px-2.5 py-1 text-xs rounded-full border transition font-medium"
+                                    :class="name === p ? 'bg-amber-100 border-amber-300 text-amber-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'">
+                                <span x-text="p"></span>
+                            </button>
+                        </template>
                     </div>
-                    
                 </div>
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" @click="addOverheadModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan</button>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Deskripsi Pos Biaya *</label>
+                    <input type="text" name="name" x-model="name" required placeholder="Contoh: Sewa Mesin Profil, Transport Logistik, Utilitas..." 
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Estimasi Biaya (Rp) *</label>
+                        <span class="text-xs font-bold text-amber-800 font-mono" x-text="formatRupiah(estCost)"></span>
+                    </div>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-xs">Rp</span>
+                        <input type="number" step="1" min="0" name="est_cost" x-model.number="estCost" required 
+                               class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Catatan</label>
+                    <input type="text" name="notes" x-model="notes" placeholder="Keterangan alokasi atau vendor..." 
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="addOverheadModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow transition">
+                        Simpan ke Overhead
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- MODAL: Edit Overhead -->
-    <div x-show="editOverheadModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div @click.away="editOverheadModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
-            <h3 class="text-lg font-bold text-slate-900">Edit Biaya Overhead</h3>
-            <form :action="'/overhead/' + currentOverhead.id + '/update/'" method="POST" class="space-y-3">
+    <div x-show="editOverheadModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="editOverheadModal = false" class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Edit Biaya Overhead</h3>
+                <button type="button" @click="editOverheadModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form :action="'/overhead/' + currentOverhead.id + '/update/'" method="POST" class="space-y-4">
                 {% csrf_token %}
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Deskripsi Biaya *</label>
-                    <input type="text" name="name" x-model="currentOverhead.name" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Deskripsi Pos Biaya *</label>
+                    <input type="text" name="name" x-model="currentOverhead.name" required class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-semibold">
                 </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Estimasi Biaya (Rp)</label>
-                        <input type="number" step="0.01" name="est_cost" x-model="currentOverhead.est_cost" class="w-full rounded border border-slate-300 p-2 text-sm">
+
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Estimasi Biaya (Rp)</label>
+                        <span class="text-xs font-bold text-amber-800 font-mono" 
+                              x-text="'Rp ' + Math.round(parseFloat(currentOverhead.est_cost) || 0).toLocaleString('id-ID')"></span>
                     </div>
-                    
+                    <input type="number" step="1" name="est_cost" x-model="currentOverhead.est_cost" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold">
                 </div>
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" @click="editOverheadModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update</button>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Catatan</label>
+                    <input type="text" name="notes" x-model="currentOverhead.notes" class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm">
+                </div>
+
+                <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="editOverheadModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition">Batal</button>
+                    <button type="submit" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow transition">Update Biaya</button>
                 </div>
             </form>
         </div>
@@ -1114,6 +1454,129 @@ function bomAddModalController() {
             return q * c;
         },
 
+        formatRupiah(val) {
+            const num = parseFloat(val) || 0;
+            return 'Rp ' + Math.round(num).toLocaleString('id-ID');
+        }
+    };
+}
+
+function laborAddModalController() {
+    const masterLaborsData = {{ master_labors_json|safe }};
+    return {
+        masterLabors: masterLaborsData,
+        searchRole: '',
+        roleDropdownOpen: false,
+        selectedLabor: null,
+        roleName: '',
+        unit: 'jam',
+        estQuantity: 1,
+        estRate: 0,
+        notes: '',
+
+        get filteredLabors() {
+            if (!this.searchRole || (this.selectedLabor && this.selectedLabor.role_name === this.searchRole)) return this.masterLabors;
+            const q = this.searchRole.toLowerCase();
+            return this.masterLabors.filter(l => l.role_name.toLowerCase().includes(q));
+        },
+
+        selectLabor(l) {
+            this.selectedLabor = l;
+            this.roleName = l.role_name;
+            this.searchRole = l.role_name;
+            this.unit = l.unit;
+            this.estRate = l.standard_rate;
+            this.roleDropdownOpen = false;
+        },
+
+        clearLabor() {
+            this.selectedLabor = null;
+            this.searchRole = '';
+            this.roleName = '';
+            this.estRate = 0;
+            this.roleDropdownOpen = true;
+        },
+
+        get subtotal() {
+            const q = parseFloat(this.estQuantity) || 0;
+            const r = parseFloat(this.estRate) || 0;
+            return q * r;
+        },
+
+        formatRupiah(val) {
+            const num = parseFloat(val) || 0;
+            return 'Rp ' + Math.round(num).toLocaleString('id-ID');
+        }
+    };
+}
+
+function fgAddModalController() {
+    const finishedGoodsData = {{ master_finished_goods_json|safe }};
+    return {
+        finishedGoods: finishedGoodsData,
+        searchFg: '',
+        fgDropdownOpen: false,
+        selectedFg: null,
+        fgUuid: '',
+        estQty: 1,
+        estUnitCost: 0,
+        notes: '',
+
+        get filteredFinishedGoods() {
+            if (!this.searchFg || this.fgUuid) return this.finishedGoods;
+            const q = this.searchFg.toLowerCase();
+            return this.finishedGoods.filter(fg =>
+                fg.name.toLowerCase().includes(q) ||
+                fg.sku.toLowerCase().includes(q) ||
+                (fg.category && fg.category.toLowerCase().includes(q))
+            );
+        },
+
+        selectFg(fg) {
+            this.selectedFg = fg;
+            this.fgUuid = fg.uuid;
+            this.searchFg = `[${fg.sku}] ${fg.name}`;
+            this.estUnitCost = fg.standard_cost;
+            this.fgDropdownOpen = false;
+        },
+
+        clearFg() {
+            this.selectedFg = null;
+            this.fgUuid = '';
+            this.searchFg = '';
+            this.estUnitCost = 0;
+            this.fgDropdownOpen = true;
+        },
+
+        get subtotal() {
+            const q = parseFloat(this.estQty) || 0;
+            const c = parseFloat(this.estUnitCost) || 0;
+            return q * c;
+        },
+
+        formatRupiah(val) {
+            const num = parseFloat(val) || 0;
+            return 'Rp ' + Math.round(num).toLocaleString('id-ID');
+        }
+    };
+}
+
+function overheadAddModalController() {
+    return {
+        name: '',
+        estCost: 0,
+        notes: '',
+        presets: [
+            'Listrik & Utilitas Pabrik',
+            'Sewa Mesin / Alat',
+            'Biaya Pengiriman & Transportasi',
+            'Jasa Subkontraktor / Maklon',
+            'Konsumsi & Akomodasi',
+            'Packaging & Packing Kayu'
+        ],
+        setPreset(preset) {
+            this.name = preset;
+        },
         formatRupiah(val) {
             const num = parseFloat(val) || 0;
             return 'Rp ' + Math.round(num).toLocaleString('id-ID');

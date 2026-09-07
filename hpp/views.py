@@ -178,6 +178,27 @@ def project_create(request):
     })
 
 
+def _clean_decimal(val_str, default=Decimal(0)):
+    if val_str is None:
+        return default
+    if isinstance(val_str, (int, float, Decimal)):
+        return Decimal(str(val_str))
+    cleaned = str(val_str).replace("Rp", "").replace("rp", "").replace(" ", "").strip()
+    if "," in cleaned and "." in cleaned:
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    elif "." in cleaned and "," not in cleaned:
+        parts = cleaned.split(".")
+        if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
+            cleaned = cleaned.replace(".", "")
+    elif "," in cleaned:
+        cleaned = cleaned.replace(",", ".")
+    try:
+        res = Decimal(cleaned or 0)
+        return res if res >= 0 else Decimal(0)
+    except Exception:
+        return default
+
+
 def project_detail(request, uuid):
     project = get_object_or_404(Project, uuid=uuid)
     materials = get_ordered_bom(project)
@@ -189,7 +210,11 @@ def project_detail(request, uuid):
     raw_materials = RawMaterial.objects.all().order_by("name")
     master_labors = LaborMaster.objects.all().order_by("role_name")
     master_finished_goods = FinishedGood.objects.all().order_by("name")
+
     unit_materials = UnitMaster.objects.filter(category="raw_material", is_active=True).order_by("name")
+    unit_labors = UnitMaster.objects.filter(category="labor", is_active=True).order_by("name")
+    unit_fgs = UnitMaster.objects.filter(category="finished_good", is_active=True).order_by("name")
+    unit_overheads = UnitMaster.objects.filter(category="overhead", is_active=True).order_by("name")
 
     raw_materials_json = json.dumps([
         {
@@ -205,6 +230,32 @@ def project_detail(request, uuid):
         for rm in raw_materials
     ])
 
+    master_labors_json = json.dumps([
+        {
+            "id": ml.id,
+            "uuid": str(ml.uuid),
+            "role_name": ml.role_name,
+            "unit": ml.unit,
+            "standard_rate": float(ml.standard_rate),
+            "label": f"{ml.role_name} (Rp {ml.standard_rate:,.0f} / {ml.unit})",
+        }
+        for ml in master_labors
+    ])
+
+    master_finished_goods_json = json.dumps([
+        {
+            "uuid": str(fg.uuid),
+            "sku": fg.sku,
+            "name": fg.name,
+            "category": fg.category or "Umum",
+            "unit": fg.unit,
+            "current_stock": float(fg.current_stock),
+            "standard_cost": float(fg.standard_cost),
+            "label": f"[{fg.sku}] {fg.name} (Stok: {fg.current_stock:g} {fg.unit} | Rp {fg.standard_cost:,.0f})",
+        }
+        for fg in master_finished_goods
+    ])
+
     return render(request, "hpp/project_detail.html", {
         "project": project,
         "materials": materials,
@@ -215,8 +266,13 @@ def project_detail(request, uuid):
         "raw_materials": raw_materials,
         "raw_materials_json": raw_materials_json,
         "master_labors": master_labors,
+        "master_labors_json": master_labors_json,
         "master_finished_goods": master_finished_goods,
+        "master_finished_goods_json": master_finished_goods_json,
         "unit_materials": unit_materials,
+        "unit_labors": unit_labors,
+        "unit_fgs": unit_fgs,
+        "unit_overheads": unit_overheads,
         "status_choices": Project.STATUS_CHOICES,
     })
 
@@ -413,18 +469,23 @@ def bom_item_delete(request, uuid):
 # =========================================================================
 # LABOR CRUD
 # =========================================================================
+@transaction.atomic
 def labor_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
         role_name = request.POST.get("role_name", "").strip()
         unit = request.POST.get("unit", "jam").strip()
-        est_quantity = Decimal(request.POST.get("est_quantity") or 0)
-        est_rate = Decimal(request.POST.get("est_rate") or 0)
-        act_quantity = Decimal(request.POST.get("act_quantity") or 0)
-        act_rate = Decimal(request.POST.get("act_rate") or 0)
-        notes = request.POST.get("notes", "")
+        est_quantity = _clean_decimal(request.POST.get("est_quantity"), Decimal(1))
+        est_rate = _clean_decimal(request.POST.get("est_rate"), Decimal(0))
+        act_quantity = _clean_decimal(request.POST.get("act_quantity"), Decimal(0))
+        act_rate = _clean_decimal(request.POST.get("act_rate"), Decimal(0))
+        notes = request.POST.get("notes", "").strip()
 
-        ProjectLabor.objects.create(
+        if not role_name:
+            messages.error(request, "Peran / posisi tenaga kerja wajib diisi.")
+            return redirect("project_detail", uuid=project.uuid)
+
+        labor = ProjectLabor.objects.create(
             project=project,
             role_name=role_name,
             unit=unit,
@@ -434,20 +495,25 @@ def labor_add(request, project_uuid):
             act_rate=act_rate,
             notes=notes,
         )
+        messages.success(request, f"Tenaga kerja '{labor.role_name}' ({est_quantity:g} {unit}) berhasil ditambahkan ke estimasi HPP.")
     return redirect("project_detail", uuid=project.uuid)
 
 
+@transaction.atomic
 def labor_update(request, uuid):
     item = get_object_or_404(ProjectLabor, uuid=uuid)
     if request.method == "POST":
-        item.role_name = request.POST.get("role_name", item.role_name).strip()
+        role_name = request.POST.get("role_name", "").strip()
+        if role_name:
+            item.role_name = role_name
         item.unit = request.POST.get("unit", item.unit).strip()
-        item.est_quantity = Decimal(request.POST.get("est_quantity") or 0)
-        item.est_rate = Decimal(request.POST.get("est_rate") or 0)
-        item.act_quantity = Decimal(request.POST.get("act_quantity") or 0)
-        item.act_rate = Decimal(request.POST.get("act_rate") or 0)
-        item.notes = request.POST.get("notes", item.notes)
+        item.est_quantity = _clean_decimal(request.POST.get("est_quantity"), item.est_quantity)
+        item.est_rate = _clean_decimal(request.POST.get("est_rate"), item.est_rate)
+        item.act_quantity = _clean_decimal(request.POST.get("act_quantity"), item.act_quantity)
+        item.act_rate = _clean_decimal(request.POST.get("act_rate"), item.act_rate)
+        item.notes = request.POST.get("notes", item.notes).strip()
         item.save()
+        messages.success(request, f"Data tenaga kerja '{item.role_name}' berhasil diperbarui.")
     return redirect("project_detail", uuid=item.project.uuid)
 
 
@@ -455,20 +521,30 @@ def labor_delete(request, uuid):
     item = get_object_or_404(ProjectLabor, uuid=uuid)
     project_uuid = item.project.uuid
     if request.method == "POST":
+        if item.realizations.exists():
+            messages.error(request, f"Tenaga kerja '{item.role_name}' tidak dapat dihapus karena sudah memiliki riwayat realisasi.")
+            return redirect("project_detail", uuid=project_uuid)
+        role = item.role_name
         item.delete()
+        messages.success(request, f"Tenaga kerja '{role}' berhasil dihapus.")
     return redirect("project_detail", uuid=project_uuid)
 
 
 # =========================================================================
 # OVERHEAD CRUD
 # =========================================================================
+@transaction.atomic
 def overhead_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
-        est_cost = Decimal(request.POST.get("est_cost") or 0)
-        act_cost = Decimal(request.POST.get("act_cost") or 0)
-        notes = request.POST.get("notes", "")
+        est_cost = _clean_decimal(request.POST.get("est_cost"), Decimal(0))
+        act_cost = _clean_decimal(request.POST.get("act_cost"), Decimal(0))
+        notes = request.POST.get("notes", "").strip()
+
+        if not name:
+            messages.error(request, "Deskripsi pos biaya overhead wajib diisi.")
+            return redirect("project_detail", uuid=project.uuid)
 
         ProjectOverhead.objects.create(
             project=project,
@@ -477,17 +553,22 @@ def overhead_add(request, project_uuid):
             act_cost=act_cost,
             notes=notes,
         )
+        messages.success(request, f"Biaya overhead '{name}' (Rp {est_cost:,.0f}) berhasil ditambahkan ke estimasi HPP.")
     return redirect("project_detail", uuid=project.uuid)
 
 
+@transaction.atomic
 def overhead_update(request, uuid):
     item = get_object_or_404(ProjectOverhead, uuid=uuid)
     if request.method == "POST":
-        item.name = request.POST.get("name", item.name).strip()
-        item.est_cost = Decimal(request.POST.get("est_cost") or 0)
-        item.act_cost = Decimal(request.POST.get("act_cost") or 0)
-        item.notes = request.POST.get("notes", item.notes)
+        name = request.POST.get("name", "").strip()
+        if name:
+            item.name = name
+        item.est_cost = _clean_decimal(request.POST.get("est_cost"), item.est_cost)
+        item.act_cost = _clean_decimal(request.POST.get("act_cost"), item.act_cost)
+        item.notes = request.POST.get("notes", item.notes).strip()
         item.save()
+        messages.success(request, f"Biaya overhead '{item.name}' berhasil diperbarui.")
     return redirect("project_detail", uuid=item.project.uuid)
 
 
@@ -495,48 +576,78 @@ def overhead_delete(request, uuid):
     item = get_object_or_404(ProjectOverhead, uuid=uuid)
     project_uuid = item.project.uuid
     if request.method == "POST":
+        if item.realizations.exists():
+            messages.error(request, f"Biaya overhead '{item.name}' tidak dapat dihapus karena sudah memiliki riwayat realisasi.")
+            return redirect("project_detail", uuid=project_uuid)
+        name = item.name
         item.delete()
+        messages.success(request, f"Biaya overhead '{name}' berhasil dihapus.")
     return redirect("project_detail", uuid=project_uuid)
 
 
 # =========================================================================
 # PROJECT FINISHED GOODS (Barang Jadi Penyusun Project)
 # =========================================================================
+@transaction.atomic
 def project_fg_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
-        fg_uuid = request.POST.get("finished_good_uuid")
-        fg = get_object_or_404(FinishedGood, uuid=fg_uuid)
-        est_qty = Decimal(request.POST.get("est_qty") or 0)
-        est_unit_cost = Decimal(request.POST.get("est_unit_cost") or fg.standard_cost or 0)
-        act_qty = Decimal(request.POST.get("act_qty") or 0)
-        act_unit_cost = Decimal(request.POST.get("act_unit_cost") or fg.standard_cost or 0)
-        notes = request.POST.get("notes", "")
+        fg_uuid = request.POST.get("finished_good_uuid", "").strip()
+        fg = FinishedGood.objects.filter(uuid=fg_uuid).first() if fg_uuid else None
+        if not fg:
+            messages.error(request, "Barang jadi yang dipilih tidak valid.")
+            return redirect("project_detail", uuid=project.uuid)
 
-        ProjectFinishedGood.objects.create(
-            project=project,
-            finished_good=fg,
-            est_qty=est_qty,
-            est_unit_cost=est_unit_cost,
-            act_qty=act_qty,
-            act_unit_cost=act_unit_cost,
-            notes=notes,
-        )
+        est_qty = _clean_decimal(request.POST.get("est_qty"), Decimal(1))
+        est_unit_cost = _clean_decimal(request.POST.get("est_unit_cost"), fg.standard_cost)
+        act_qty = _clean_decimal(request.POST.get("act_qty"), Decimal(0))
+        act_unit_cost = _clean_decimal(request.POST.get("act_unit_cost"), fg.standard_cost)
+        notes = request.POST.get("notes", "").strip()
+
+        if est_qty <= 0:
+            messages.error(request, "Kuantitas estimasi barang jadi harus lebih besar dari 0.")
+            return redirect("project_detail", uuid=project.uuid)
+
+        # Cek apakah sudah ada barang jadi yang sama di project ini
+        existing = ProjectFinishedGood.objects.filter(project=project, finished_good=fg).first()
+        if existing:
+            existing.est_qty += est_qty
+            if est_unit_cost > 0:
+                existing.est_unit_cost = est_unit_cost
+            if notes:
+                existing.notes = f"{existing.notes}; {notes}".strip("; ")
+            existing.save()
+            messages.success(request, f"Kuantitas barang jadi '{fg.name}' diperbarui menjadi {existing.est_qty:g} {fg.unit}.")
+        else:
+            ProjectFinishedGood.objects.create(
+                project=project,
+                finished_good=fg,
+                est_qty=est_qty,
+                est_unit_cost=est_unit_cost,
+                act_qty=act_qty,
+                act_unit_cost=act_unit_cost,
+                notes=notes,
+            )
+            messages.success(request, f"Barang jadi '{fg.name}' ({est_qty:g} {fg.unit}) berhasil ditambahkan ke project.")
     return redirect("project_detail", uuid=project.uuid)
 
 
+@transaction.atomic
 def project_fg_update(request, uuid):
     item = get_object_or_404(ProjectFinishedGood, uuid=uuid)
     if request.method == "POST":
-        fg_uuid = request.POST.get("finished_good_uuid")
+        fg_uuid = request.POST.get("finished_good_uuid", "").strip()
         if fg_uuid:
-            item.finished_good = get_object_or_404(FinishedGood, uuid=fg_uuid)
-        item.est_qty = Decimal(request.POST.get("est_qty") or 0)
-        item.est_unit_cost = Decimal(request.POST.get("est_unit_cost") or 0)
-        item.act_qty = Decimal(request.POST.get("act_qty") or 0)
-        item.act_unit_cost = Decimal(request.POST.get("act_unit_cost") or 0)
-        item.notes = request.POST.get("notes", item.notes)
+            fg = FinishedGood.objects.filter(uuid=fg_uuid).first()
+            if fg:
+                item.finished_good = fg
+        item.est_qty = _clean_decimal(request.POST.get("est_qty"), item.est_qty)
+        item.est_unit_cost = _clean_decimal(request.POST.get("est_unit_cost"), item.est_unit_cost)
+        item.act_qty = _clean_decimal(request.POST.get("act_qty"), item.act_qty)
+        item.act_unit_cost = _clean_decimal(request.POST.get("act_unit_cost"), item.act_unit_cost)
+        item.notes = request.POST.get("notes", item.notes).strip()
         item.save()
+        messages.success(request, f"Data barang jadi '{item.finished_good.name}' berhasil diperbarui.")
     return redirect("project_detail", uuid=item.project.uuid)
 
 
@@ -544,7 +655,12 @@ def project_fg_delete(request, uuid):
     item = get_object_or_404(ProjectFinishedGood, uuid=uuid)
     project_uuid = item.project.uuid
     if request.method == "POST":
+        if item.realizations.exists():
+            messages.error(request, f"Barang jadi '{item.finished_good.name}' tidak dapat dihapus karena sudah ada riwayat pemakaian riil.")
+            return redirect("project_detail", uuid=project_uuid)
+        name = item.finished_good.name
         item.delete()
+        messages.success(request, f"Barang jadi '{name}' berhasil dihapus dari project.")
     return redirect("project_detail", uuid=project_uuid)
 
 
