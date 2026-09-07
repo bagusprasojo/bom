@@ -4,45 +4,7 @@
 {% block title %}Realisasi: {{ project.name }} - HPP & Manufaktur{% endblock %}
 
 {% block content %}
-<div class="space-y-6" x-data="{ 
-    tab: 'material',
-    materialModalOpen: false,
-    laborModalOpen: false,
-    fgModalOpen: false,
-    overheadModalOpen: false,
-    
-    // State form material
-    selectedBomItem: '',
-    materialDate: '{% now "Y-m-d" %}',
-    materialName: '',
-    materialUnit: 'pcs',
-    materialQty: 1,
-    materialCost: 0,
-    isMaterialSubstitute: false,
-
-    // State form labor
-    selectedLaborItem: '',
-    laborDate: '{% now "Y-m-d" %}',
-    laborRoleName: '',
-    laborUnit: 'jam',
-    laborQty: 8,
-    laborRate: 0,
-    isLaborAdditional: false,
-
-    // State form FG
-    selectedProjectFg: '',
-    selectedFgMaster: '',
-    fgDate: '{% now "Y-m-d" %}',
-    fgQty: 1,
-    fgUnitCost: 0,
-
-    // State form overhead
-    selectedOverheadItem: '',
-    overheadDate: '{% now "Y-m-d" %}',
-    overheadName: '',
-    overheadCost: 0,
-    isOverheadAdditional: false
-}">
+<div class="space-y-6" x-data="{ tab: 'material' }">
 
     <!-- Breadcrumb & Title -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -126,6 +88,7 @@
             </span>
         </div>
     </div>
+
     <!-- Navigation Tabs -->
     <div class="border-b border-slate-200 flex items-center justify-between">
         <nav class="flex space-x-2 text-xs font-bold">
@@ -151,8 +114,11 @@
     <!-- TAB 1: REALISASI MATERIAL / BOM -->
     <div x-show="tab === 'material'" class="space-y-4">
         <div class="flex items-center justify-between">
-            <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Realisasi Pengeluaran Material</h2>
-            <button @click="materialModalOpen = true" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+            <div>
+                <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Realisasi Pengeluaran Material</h2>
+                <p class="text-xs text-slate-500">Pencatatan aktual bahan baku. Jika terhubung master bahan baku, mutasi stok OUT otomatis dicatat.</p>
+            </div>
+            <button @click="$dispatch('open-material-modal')" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>+ Catat Realisasi Material</span>
             </button>
@@ -181,6 +147,11 @@
                             {% if r.bom_item %}
                             <span class="block text-[10px] text-slate-400">Ref BOM: {{ r.bom_item.name }}</span>
                             {% endif %}
+                            {% if r.raw_material %}
+                            <span class="inline-block mt-0.5 text-[10px] font-mono text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-200">
+                                Gudang: {{ r.raw_material.code }}
+                            </span>
+                            {% endif %}
                         </td>
                         <td class="px-4 py-2.5 text-center">
                             {% if r.is_substitute %}
@@ -194,7 +165,7 @@
                         <td class="px-4 py-2.5 text-right font-mono font-bold text-cyan-800">{{ r.total_cost|rupiah }}</td>
                         <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
                         <td class="px-4 py-2.5 text-center whitespace-nowrap">
-                            <a href="{% url 'realization_bom_delete' r.uuid %}" onclick="return confirm('Hapus log realisasi material ini?');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Hapus</a>
+                            <a href="{% url 'realization_bom_delete' r.uuid %}" onclick="return confirm('Hapus log realisasi material ini? Stok gudang akan dikembalikan.');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Hapus</a>
                         </td>
                     </tr>
                     {% empty %}
@@ -215,11 +186,15 @@
             </table>
         </div>
     </div>
+
     <!-- TAB 2: REALISASI TENAGA KERJA -->
     <div x-show="tab === 'labor'" class="space-y-4" style="display: none;">
         <div class="flex items-center justify-between">
-            <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Realisasi Biaya Tenaga Kerja</h2>
-            <button @click="laborModalOpen = true" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+            <div>
+                <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Realisasi Biaya Tenaga Kerja</h2>
+                <p class="text-xs text-slate-500">Pencatatan jam kerja atau borongan aktual pekerja lapangan.</p>
+            </div>
+            <button @click="$dispatch('open-labor-modal')" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>+ Catat Realisasi Tenaga Kerja</span>
             </button>
@@ -282,6 +257,7 @@
             </table>
         </div>
     </div>
+
     <!-- TAB 3: REALISASI BARANG JADI (AUTO STOCK OUT) -->
     <div x-show="tab === 'fg'" class="space-y-4" style="display: none;">
         <div class="flex items-center justify-between">
@@ -289,7 +265,7 @@
                 <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Pemakaian Barang Jadi (Auto-Stock OUT)</h2>
                 <p class="text-xs text-slate-500">Setiap log yang disimpan di bawah otomatis memotong stok on-hand dan tercatat di kartu stock.</p>
             </div>
-            <button @click="fgModalOpen = true" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+            <button @click="$dispatch('open-fg-modal')" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>+ Catat Pemakaian Barang Jadi</span>
             </button>
@@ -350,11 +326,15 @@
             </table>
         </div>
     </div>
+
     <!-- TAB 4: REALISASI OVERHEAD -->
     <div x-show="tab === 'overhead'" class="space-y-4" style="display: none;">
         <div class="flex items-center justify-between">
-            <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Pengeluaran Biaya Overhead</h2>
-            <button @click="overheadModalOpen = true" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+            <div>
+                <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Pengeluaran Biaya Overhead</h2>
+                <p class="text-xs text-slate-500">Biaya operasional lapangan, sewa mesin, transport, maklon, dan konsumsi.</p>
+            </div>
+            <button @click="$dispatch('open-overhead-modal')" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>+ Catat Biaya Overhead</span>
             </button>
@@ -408,305 +388,1080 @@
             </table>
         </div>
     </div>
-    <!-- MODAL 1: INPUT REALISASI MATERIAL -->
-    <div x-show="materialModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="materialModalOpen = false">
+
+    <!-- ========================================================================= -->
+    <!-- MODAL 1: INPUT REALISASI MATERIAL (MODERNIZED) -->
+    <!-- ========================================================================= -->
+    <div x-data="realizationMaterialModalController()" 
+         @open-material-modal.window="openModal()" 
+         x-show="isOpen" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" 
+         style="display: none;">
+        
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-100" 
+             @click.outside="closeModal()">
+            
+            <!-- Header -->
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 class="font-bold text-slate-900 text-base">Catat Realisasi Pengeluaran Material</h3>
-                <button @click="materialModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold text-sm">
+                        📦
+                    </span>
+                    <div>
+                        <h3 class="font-bold text-slate-900 text-base">Catat Realisasi Pengeluaran Material</h3>
+                        <p class="text-[11px] text-slate-500">Pilih dari rencana BOM atau cari bahan baku dari gudang.</p>
+                    </div>
+                </div>
+                <button @click="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
             </div>
-            <form action="{% url 'realization_bom_add' project.uuid %}" method="POST" class="space-y-3 text-xs">
+
+            <!-- Source Mode Selector -->
+            <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg text-xs font-semibold">
+                <button type="button" 
+                        @click="sourceMode = 'bom'; onSelectBom();" 
+                        :class="sourceMode === 'bom' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        class="py-1.5 px-3 rounded-md transition text-center flex items-center justify-center gap-1.5">
+                    <span>📋 Item Terencana (BOM)</span>
+                </button>
+                <button type="button" 
+                        @click="sourceMode = 'warehouse'; selectedBomUuid = ''; selectedBomItem = null; isSubstitute = true;" 
+                        :class="sourceMode === 'warehouse' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        class="py-1.5 px-3 rounded-md transition text-center flex items-center justify-center gap-1.5">
+                    <span>🏬 Bahan Gudang / Substitusi</span>
+                </button>
+            </div>
+
+            <form action="{% url 'realization_bom_add' project.uuid %}" method="POST" class="space-y-3.5 text-xs">
                 {% csrf_token %}
+                <input type="hidden" name="bom_item_uuid" :value="selectedBomUuid">
+                <input type="hidden" name="raw_material_uuid" :value="selectedRawMaterial ? selectedRawMaterial.uuid : (selectedBomItem && selectedBomItem.raw_material_uuid ? selectedBomItem.raw_material_uuid : '')">
+
+                <!-- Tanggal Realisasi -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Realisasi</label>
-                    <input type="date" name="date" x-model="materialDate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Realisasi Lapangan</label>
+                    <input type="date" name="date" x-model="date" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                 </div>
 
-                <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Pilih Item dari BOM Terencana (Opsional)</label>
-                    <select name="bom_item_uuid" x-model="selectedBomItem" @change="
-                        let opt = $event.target.selectedOptions[0];
-                        if (opt && opt.value) {
-                            materialName = opt.getAttribute('data-name') || '';
-                            materialUnit = opt.getAttribute('data-unit') || 'pcs';
-                            materialCost = opt.getAttribute('data-cost') || 0;
-                            isMaterialSubstitute = false;
-                        }
-                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                        <option value="">-- [Pilih dari Item BOM Terencana] --</option>
+                <!-- SELECTOR BOM (if sourceMode === 'bom') -->
+                <div x-show="sourceMode === 'bom'" class="space-y-2">
+                    <label class="block font-semibold text-slate-700">Pilih dari Item BOM Terencana</label>
+                    <select x-model="selectedBomUuid" @change="onSelectBom()" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        <option value="">-- [Pilih Item Terencana dari BOM] --</option>
                         {% for b in bom_items %}
-                        <option value="{{ b.uuid }}" data-name="{{ b.name }}" data-unit="{{ b.unit }}" data-cost="{{ b.est_unit_cost }}">
-                            {{ b.name }} (Est: {{ b.est_qty|rupiah }} {{ b.unit }} @ {{ b.est_unit_cost|rupiah }})
+                        <option value="{{ b.uuid }}">
+                            {{ b.name }} &bull; Est: {{ b.est_qty|rupiah }} {{ b.unit }} @ Rp {{ b.est_unit_cost|rupiah }}
                         </option>
                         {% endfor %}
                     </select>
+
+                    <template x-if="selectedBomItem">
+                        <div class="bg-cyan-50/60 border border-cyan-200 rounded-lg p-2.5 flex items-center justify-between text-[11px]">
+                            <div>
+                                <span class="font-bold text-cyan-900 block" x-text="selectedBomItem.name"></span>
+                                <span class="text-slate-500">Rencana: <strong x-text="selectedBomItem.est_qty + ' ' + selectedBomItem.unit"></strong> @ <strong x-text="'Rp ' + formatRupiah(selectedBomItem.est_unit_cost)"></strong></span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-slate-500 block">Stok Gudang:</span>
+                                <span class="font-bold font-mono" :class="selectedBomItem.current_stock > 0 ? 'text-emerald-700' : 'text-slate-500'" x-text="selectedBomItem.current_stock + ' ' + selectedBomItem.stock_unit"></span>
+                            </div>
+                        </div>
+                    </template>
                 </div>
 
-                <div x-show="!selectedBomItem">
-                    <label class="block font-semibold text-slate-700 mb-1">Atau Pilih dari Master Bahan Baku Gudang</label>
-                    <select name="raw_material_uuid" @change="
-                        let opt = $event.target.selectedOptions[0];
-                        if (opt && opt.value) {
-                            materialName = opt.getAttribute('data-name') || '';
-                            materialUnit = opt.getAttribute('data-unit') || 'pcs';
-                            materialCost = opt.getAttribute('data-cost') || 0;
-                            isMaterialSubstitute = true;
-                        }
-                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                        <option value="">-- [Pilih Bahan Baku Gudang / Ketik Manual] --</option>
-                        {% for rm in master_raw_materials %}
-                        <option value="{{ rm.uuid }}" data-name="{{ rm.name }}" data-unit="{{ rm.stock_unit }}" data-cost="{{ rm.last_purchase_price }}">
-                            [{{ rm.code }}] {{ rm.name }} (Stok: {{ rm.current_stock|rupiah }} {{ rm.stock_unit }} @ Rp {{ rm.last_purchase_price|rupiah }})
-                        </option>
-                        {% endfor %}
-                    </select>
+                <!-- SELECTOR AUTOCOMPLETE WAREHOUSE (if sourceMode === 'warehouse') -->
+                <div x-show="sourceMode === 'warehouse'" class="space-y-2 relative">
+                    <div class="flex items-center justify-between">
+                        <label class="block font-semibold text-slate-700">Cari Bahan Baku di Master Gudang</label>
+                        <span class="text-[10px] text-cyan-700 font-medium">Auto-filter kode & nama</span>
+                    </div>
+
+                    <div class="relative">
+                        <input type="text" 
+                               x-model="searchQuery" 
+                               @focus="isComboboxOpen = true"
+                               @input="isComboboxOpen = true"
+                               placeholder="Ketik kode atau nama bahan (cth: Kayu, Cat, Baut)..."
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 pr-8">
+                        <div class="absolute right-2.5 top-2.5 text-slate-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+
+                        <!-- Dropdown Autocomplete -->
+                        <div x-show="isComboboxOpen" 
+                             @click.outside="isComboboxOpen = false"
+                             class="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100 text-xs">
+                            <template x-for="rm in filteredRawMaterials" :key="rm.uuid">
+                                <div @click="selectRawMaterial(rm)" 
+                                     class="p-2.5 hover:bg-cyan-50/70 cursor-pointer flex items-center justify-between transition">
+                                    <div>
+                                        <div class="font-bold text-slate-800" x-text="rm.name"></div>
+                                        <div class="text-[10px] text-slate-400 font-mono">
+                                            <span x-text="rm.code"></span> &bull; <span x-text="rm.category"></span>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
+                                              :class="rm.current_stock > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'"
+                                              x-text="'Stok: ' + rm.current_stock + ' ' + rm.stock_unit">
+                                        </span>
+                                        <span class="block text-[10px] text-slate-500 mt-0.5 font-mono" x-text="'Rp ' + formatRupiah(rm.last_purchase_price)"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="filteredRawMaterials.length === 0" class="p-3 text-center text-slate-400 text-xs">
+                                Tidak ada bahan baku yang cocok.
+                            </div>
+                        </div>
+                    </div>
+
+                    <template x-if="selectedRawMaterial">
+                        <div class="bg-cyan-50/60 border border-cyan-200 rounded-lg p-2.5 flex items-center justify-between text-[11px]">
+                            <div>
+                                <span class="font-bold text-cyan-900 block" x-text="'[' + selectedRawMaterial.code + '] ' + selectedRawMaterial.name"></span>
+                                <span class="text-slate-500">Harga Beli Terakhir: <strong x-text="'Rp ' + formatRupiah(selectedRawMaterial.last_purchase_price) + ' / ' + selectedRawMaterial.stock_unit"></strong></span>
+                            </div>
+                            <button type="button" @click="clearRawMaterial()" class="text-rose-600 hover:text-rose-800 font-semibold text-[10px]">
+                                Ganti
+                            </button>
+                        </div>
+                    </template>
                 </div>
 
+                <!-- Nama Material Riil -->
                 <div>
                     <label class="block font-semibold text-slate-700 mb-1">Nama Material Riil</label>
-                    <input type="text" name="item_name" x-model="materialName" required placeholder="Nama bahan/material aktual" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <input type="text" name="item_name" x-model="itemName" required placeholder="Nama material / spesifikasi riil di lapangan" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                 </div>
 
+                <!-- Quantity & Unit -->
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Quantity</label>
-                        <input type="number" step="0.01" name="qty" x-model="materialQty" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                        <label class="block font-semibold text-slate-700 mb-1">Quantity Pemakaian</label>
+                        <input type="number" step="0.0001" name="qty" x-model="qty" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono font-bold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                     </div>
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Satuan (Unit)</label>
-                        <input type="text" name="unit" x-model="materialUnit" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <input type="text" name="unit" x-model="unit" required list="materialUnitsList" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        <datalist id="materialUnitsList">
+                            {% for u in unit_materials %}
+                            <option value="{{ u.code }}">{{ u.name }}</option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                 </div>
 
+                <!-- Harga Satuan Riil -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Harga Satuan Riil (Tanpa Rp)</label>
-                    <input type="number" step="0.01" name="unit_cost" x-model="materialCost" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    <label class="block font-semibold text-slate-700 mb-1">Harga Satuan Riil (Rp)</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-2 text-slate-400 font-semibold">Rp</span>
+                        <input type="number" step="0.01" name="unit_cost" x-model="unitCost" required class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-xs font-mono font-bold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                    </div>
                 </div>
 
-                <div class="flex items-center gap-2 pt-1">
-                    <input type="checkbox" name="is_substitute" value="1" id="mat_sub" x-model="isMaterialSubstitute" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
-                    <label for="mat_sub" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Material Pengganti (Substitusi)</label>
+                <!-- Peringatan Stok Melebihi jika ada -->
+                <div x-show="isStockExceeded" class="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] flex items-center gap-2">
+                    <span class="text-sm">⚠️</span>
+                    <span><strong>Perhatian:</strong> Kuantitas realisasi (<span x-text="qty"></span> <span x-text="unit"></span>) melebihi persediaan gudang saat ini (<span x-text="currentStock"></span> <span x-text="currentStockUnit"></span>). Stok fisik akan menjadi minus.</span>
                 </div>
 
+                <!-- Subtotal Preview Card -->
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-semibold">Subtotal Realisasi:</span>
+                        <span class="font-mono font-black text-cyan-800 text-sm" x-text="'Rp ' + formatRupiah(subtotal)"></span>
+                    </div>
+                    <template x-if="estSubtotal !== null">
+                        <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200">
+                            <span>Bandingkan Estimasi BOM:</span>
+                            <span>
+                                <span class="font-mono" x-text="'Rp ' + formatRupiah(estSubtotal)"></span>
+                                <span class="font-semibold ml-1 font-mono" 
+                                      :class="diffSubtotal > 0 ? 'text-rose-600' : 'text-emerald-600'"
+                                      x-text="(diffSubtotal > 0 ? '(+' : '(') + 'Rp ' + formatRupiah(diffSubtotal) + ')'">
+                                </span>
+                            </span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Substitusi Checkbox -->
+                <div class="flex items-center gap-2 pt-0.5">
+                    <input type="checkbox" name="is_substitute" value="1" id="mat_sub_check" x-model="isSubstitute" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    <label for="mat_sub_check" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Material Pengganti (Substitusi / Tak Terencana)</label>
+                </div>
+
+                <!-- Catatan -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
-                    <textarea name="notes" rows="2" placeholder="Nomor nota, supplier, alasan ganti, dll" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan / No. Surat Jalan / Nota</label>
+                    <textarea name="notes" rows="2" x-model="notes" placeholder="No. nota, supplier pembelian, spesifikasi batch, alasan ganti..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"></textarea>
                 </div>
 
+                <!-- Modal Actions -->
                 <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                    <button type="button" @click="materialModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold shadow">Simpan Realisasi</button>
+                    <button type="button" @click="closeModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold transition">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-semibold shadow transition flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>Simpan Realisasi Material</span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
-    <!-- MODAL 2: INPUT REALISASI TENAGA KERJA -->
-    <div x-show="laborModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="laborModalOpen = false">
+
+    <!-- ========================================================================= -->
+    <!-- MODAL 2: INPUT REALISASI TENAGA KERJA (MODERNIZED) -->
+    <!-- ========================================================================= -->
+    <div x-data="realizationLaborModalController()" 
+         @open-labor-modal.window="openModal()" 
+         x-show="isOpen" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" 
+         style="display: none;">
+        
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-100" 
+             @click.outside="closeModal()">
+            
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 class="font-bold text-slate-900 text-base">Catat Realisasi Tenaga Kerja</h3>
-                <button @click="laborModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold text-sm">
+                        👷
+                    </span>
+                    <div>
+                        <h3 class="font-bold text-slate-900 text-base">Catat Realisasi Tenaga Kerja</h3>
+                        <p class="text-[11px] text-slate-500">Pilih dari rencana tenaga kerja atau input tenaga kerja baru/lembur.</p>
+                    </div>
+                </div>
+                <button @click="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
             </div>
-            <form action="{% url 'realization_labor_add' project.uuid %}" method="POST" class="space-y-3 text-xs">
+
+            <!-- Source Mode Selector -->
+            <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg text-xs font-semibold">
+                <button type="button" 
+                        @click="sourceMode = 'planned'; onSelectLabor();" 
+                        :class="sourceMode === 'planned' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        class="py-1.5 px-3 rounded-md transition text-center">
+                    📋 Tenaga Kerja Terencana
+                </button>
+                <button type="button" 
+                        @click="sourceMode = 'additional'; selectedLaborUuid = ''; selectedLaborItem = null; roleName = ''; isAdditional = true;" 
+                        :class="sourceMode === 'additional' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        class="py-1.5 px-3 rounded-md transition text-center">
+                    ➕ Tenaga Tambahan / Baru
+                </button>
+            </div>
+
+            <form action="{% url 'realization_labor_add' project.uuid %}" method="POST" class="space-y-3.5 text-xs">
                 {% csrf_token %}
+                <input type="hidden" name="labor_item_uuid" :value="selectedLaborUuid">
+
+                <!-- Tanggal Kerja -->
                 <div>
                     <label class="block font-semibold text-slate-700 mb-1">Tanggal Kerja</label>
-                    <input type="date" name="date" x-model="laborDate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <input type="date" name="date" x-model="date" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                 </div>
 
-                <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Pilih dari Rencana Tenaga Kerja (Opsional)</label>
-                    <select name="labor_item_uuid" x-model="selectedLaborItem" @change="
-                        let opt = $event.target.selectedOptions[0];
-                        if (opt && opt.value) {
-                            laborRoleName = opt.getAttribute('data-role') || '';
-                            laborUnit = opt.getAttribute('data-unit') || 'jam';
-                            laborRate = opt.getAttribute('data-rate') || 0;
-                            isLaborAdditional = false;
-                        }
-                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                        <option value="">-- [Tenaga Kerja Tambahan / Tidak Terencana] --</option>
+                <!-- Dropdown Rencana (if sourceMode === 'planned') -->
+                <div x-show="sourceMode === 'planned'" class="space-y-2">
+                    <label class="block font-semibold text-slate-700">Pilih dari Rencana Tenaga Kerja</label>
+                    <select x-model="selectedLaborUuid" @change="onSelectLabor()" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        <option value="">-- [Pilih dari Rencana Tenaga Kerja] --</option>
                         {% for l in labor_items %}
-                        <option value="{{ l.uuid }}" data-role="{{ l.role_name }}" data-unit="{{ l.unit }}" data-rate="{{ l.est_rate }}">
-                            {{ l.role_name }} (Est: {{ l.est_quantity|rupiah }} {{ l.unit }} @ {{ l.est_rate|rupiah }})
+                        <option value="{{ l.uuid }}">
+                            {{ l.role_name }} &bull; Est: {{ l.est_quantity|rupiah }} {{ l.unit }} @ Rp {{ l.est_rate|rupiah }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
 
+                <!-- Peran / Nama Tenaga Kerja -->
                 <div>
                     <label class="block font-semibold text-slate-700 mb-1">Peran / Nama Tenaga Kerja</label>
-                    <input type="text" name="role_name" x-model="laborRoleName" required placeholder="Tukang Las, Finishing, dll" class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <input type="text" name="role_name" x-model="roleName" required placeholder="Tukang Las, Finishing, Mandor Lapangan, dll" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                 </div>
 
+                <!-- Volume & Satuan -->
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Volume / Jumlah Jam</label>
-                        <input type="number" step="0.01" name="quantity" x-model="laborQty" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                        <label class="block font-semibold text-slate-700 mb-1">Durasi / Volume</label>
+                        <input type="number" step="0.1" name="quantity" x-model="quantity" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono font-bold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                     </div>
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Satuan</label>
-                        <input type="text" name="unit" x-model="laborUnit" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan (Unit)</label>
+                        <input type="text" name="unit" x-model="unit" required list="laborUnitsList" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        <datalist id="laborUnitsList">
+                            {% for u in unit_labors %}
+                            <option value="{{ u.code }}">{{ u.name }}</option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                 </div>
 
+                <!-- Tarif Upah Riil -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Tarif Upah Riil</label>
-                    <input type="number" step="0.01" name="rate" x-model="laborRate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    <label class="block font-semibold text-slate-700 mb-1">Tarif Upah Riil (Rp)</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-2 text-slate-400 font-semibold">Rp</span>
+                        <input type="number" step="0.01" name="rate" x-model="rate" required class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-xs font-mono font-bold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                    </div>
                 </div>
 
-                <div class="flex items-center gap-2 pt-1">
-                    <input type="checkbox" name="is_additional" value="1" id="lab_add" x-model="isLaborAdditional" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
-                    <label for="lab_add" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Tenaga Kerja Tambahan</label>
+                <!-- Subtotal Preview Card -->
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-semibold">Total Biaya Upah Riil:</span>
+                        <span class="font-mono font-black text-cyan-800 text-sm" x-text="'Rp ' + formatRupiah(subtotal)"></span>
+                    </div>
+                    <template x-if="estSubtotal !== null">
+                        <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200">
+                            <span>Estimasi Awal:</span>
+                            <span class="font-mono" x-text="'Rp ' + formatRupiah(estSubtotal)"></span>
+                        </div>
+                    </template>
                 </div>
 
+                <!-- Additional Checkbox -->
+                <div class="flex items-center gap-2 pt-0.5">
+                    <input type="checkbox" name="is_additional" value="1" id="lab_add_check" x-model="isAdditional" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    <label for="lab_add_check" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Tenaga Kerja Tambahan / Tak Terencana</label>
+                </div>
+
+                <!-- Catatan -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
-                    <textarea name="notes" rows="2" placeholder="Nama tukang, lembur, pengerjaan khusus..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan / Nama Pekerja</label>
+                    <textarea name="notes" rows="2" x-model="notes" placeholder="Nama tukang, shift lembur, no bukti upah mingguan..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"></textarea>
                 </div>
 
                 <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                    <button type="button" @click="laborModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold shadow">Simpan Realisasi</button>
+                    <button type="button" @click="closeModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold transition">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-semibold shadow transition flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>Simpan Realisasi Tenaga Kerja</span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
-    <!-- MODAL 3: INPUT REALISASI BARANG JADI -->
-    <div x-show="fgModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="fgModalOpen = false">
+
+    <!-- ========================================================================= -->
+    <!-- MODAL 3: INPUT REALISASI BARANG JADI (MODERNIZED AUTO STOCK OUT) -->
+    <!-- ========================================================================= -->
+    <div x-data="realizationFgModalController()" 
+         @open-fg-modal.window="openModal()" 
+         x-show="isOpen" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" 
+         style="display: none;">
+        
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-100" 
+             @click.outside="closeModal()">
+            
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                    <h3 class="font-bold text-slate-900 text-base">Catat Pemakaian Barang Jadi</h3>
-                    <p class="text-[11px] text-slate-500">Otomatis memotong stok barang jadi on-hand.</p>
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold text-sm">
+                        🪑
+                    </span>
+                    <div>
+                        <h3 class="font-bold text-slate-900 text-base">Catat Pemakaian Barang Jadi</h3>
+                        <p class="text-[11px] text-slate-500">Otomatis memotong stok gudang dan tercatat di kartu stok.</p>
+                    </div>
                 </div>
-                <button @click="fgModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+                <button @click="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
             </div>
-            <form action="{% url 'realization_fg_add' project.uuid %}" method="POST" class="space-y-3 text-xs">
+
+            <!-- Source Mode Selector -->
+            <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg text-xs font-semibold">
+                <button type="button" 
+                        @click="sourceMode = 'project'; onSelectProjectFg();" 
+                        :class="sourceMode === 'project' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        class="py-1.5 px-3 rounded-md transition text-center">
+                    📋 Barang Jadi Rencana Project
+                </button>
+                <button type="button" 
+                        @click="sourceMode = 'master'; selectedProjectFgUuid = ''; selectedFgItem = null;" 
+                        :class="sourceMode === 'master' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        class="py-1.5 px-3 rounded-md transition text-center">
+                    🏬 Master Barang Jadi Lainnya
+                </button>
+            </div>
+
+            <form action="{% url 'realization_fg_add' project.uuid %}" method="POST" class="space-y-3.5 text-xs">
                 {% csrf_token %}
+                <input type="hidden" name="project_fg_uuid" :value="selectedProjectFgUuid">
+                <input type="hidden" name="fg_uuid" :value="selectedFgMaster ? selectedFgMaster.uuid : ''">
+
+                <!-- Tanggal Pemakaian -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Pemakaian</label>
-                    <input type="date" name="date" x-model="fgDate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Pemakaian / Pengambilan</label>
+                    <input type="date" name="date" x-model="date" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                 </div>
 
-                <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Pilih Barang Jadi dari Rencana Project</label>
-                    <select name="project_fg_uuid" x-model="selectedProjectFg" @change="
-                        let opt = $event.target.selectedOptions[0];
-                        if (opt && opt.value) {
-                            fgUnitCost = opt.getAttribute('data-cost') || 0;
-                            selectedFgMaster = '';
-                        }
-                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                        <option value="">-- [Pilih dari Rencana Project] --</option>
+                <!-- Select Rencana Project (if sourceMode === 'project') -->
+                <div x-show="sourceMode === 'project'" class="space-y-2">
+                    <label class="block font-semibold text-slate-700">Pilih Barang Jadi dari Rencana Project</label>
+                    <select x-model="selectedProjectFgUuid" @change="onSelectProjectFg()" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        <option value="">-- [Pilih Barang Jadi Rencana Project] --</option>
                         {% for pfg in fg_items %}
-                        <option value="{{ pfg.uuid }}" data-cost="{{ pfg.est_unit_cost }}">
-                            [{{ pfg.finished_good.sku }}] {{ pfg.finished_good.name }} (Stok Tersedia: {{ pfg.finished_good.current_stock }} {{ pfg.finished_good.unit }})
+                        <option value="{{ pfg.uuid }}">
+                            [{{ pfg.finished_good.sku }}] {{ pfg.finished_good.name }} (Stok On-Hand: {{ pfg.finished_good.current_stock }} {{ pfg.finished_good.unit }})
                         </option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <div x-show="!selectedProjectFg">
-                    <label class="block font-semibold text-slate-700 mb-1">Atau Pilih dari Master Barang Jadi Lainnya</label>
-                    <select name="fg_uuid" x-model="selectedFgMaster" @change="
-                        let opt = $event.target.selectedOptions[0];
-                        if (opt && opt.value) {
-                            fgUnitCost = opt.getAttribute('data-cost') || 0;
-                        }
-                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                        <option value="">-- [Pilih Barang Jadi Lain] --</option>
-                        {% for fg in master_finished_goods %}
-                        <option value="{{ fg.uuid }}" data-cost="{{ fg.standard_cost }}">
-                            [{{ fg.sku }}] {{ fg.name }} (Stok: {{ fg.current_stock }} {{ fg.unit }})
-                        </option>
-                        {% endfor %}
-                    </select>
+                <!-- Autocomplete Master FG (if sourceMode === 'master') -->
+                <div x-show="sourceMode === 'master'" class="space-y-2 relative">
+                    <label class="block font-semibold text-slate-700">Cari di Master Barang Jadi</label>
+                    <div class="relative">
+                        <input type="text" 
+                               x-model="searchQuery" 
+                               @focus="isComboboxOpen = true"
+                               @input="isComboboxOpen = true"
+                               placeholder="Ketik SKU atau nama produk jadi..."
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 pr-8">
+                        <div class="absolute right-2.5 top-2.5 text-slate-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+
+                        <!-- Dropdown FG -->
+                        <div x-show="isComboboxOpen" 
+                             @click.outside="isComboboxOpen = false"
+                             class="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100 text-xs">
+                            <template x-for="fg in filteredMasterFgs" :key="fg.uuid">
+                                <div @click="selectFgMaster(fg)" 
+                                     class="p-2.5 hover:bg-cyan-50/70 cursor-pointer flex items-center justify-between transition">
+                                    <div>
+                                        <div class="font-bold text-slate-800" x-text="fg.name"></div>
+                                        <div class="text-[10px] text-slate-400 font-mono" x-text="'SKU: ' + fg.sku"></div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
+                                              :class="fg.current_stock > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'"
+                                              x-text="'Stok: ' + fg.current_stock + ' ' + fg.unit">
+                                        </span>
+                                        <span class="block text-[10px] text-slate-500 mt-0.5 font-mono" x-text="'Rp ' + formatRupiah(fg.standard_cost)"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="filteredMasterFgs.length === 0" class="p-3 text-center text-slate-400 text-xs">
+                                Tidak ada barang jadi yang cocok.
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- Current Stock Badge Card -->
+                <template x-if="currentFg">
+                    <div class="bg-cyan-50/60 border border-cyan-200 rounded-lg p-3 flex items-center justify-between text-xs">
+                        <div>
+                            <span class="font-bold text-cyan-900 block" x-text="'[' + currentFg.sku + '] ' + currentFg.name"></span>
+                            <span class="text-slate-500 text-[11px]">Satuan: <strong x-text="currentFg.unit"></strong></span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-slate-500 text-[10px] block">Stok On-Hand:</span>
+                            <span class="font-mono font-bold text-sm" 
+                                  :class="currentFg.current_stock > 0 ? 'text-emerald-700' : 'text-rose-700'"
+                                  x-text="currentFg.current_stock + ' ' + currentFg.unit">
+                            </span>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Quantity & Unit Cost -->
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Jumlah Dipakai</label>
-                        <input type="number" step="0.01" name="quantity" x-model="fgQty" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                        <label class="block font-semibold text-slate-700 mb-1">Jumlah Pemakaian</label>
+                        <input type="number" step="0.01" name="quantity" x-model="quantity" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono font-bold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                     </div>
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">HPP Satuan Riil</label>
-                        <input type="number" step="0.01" name="unit_cost" x-model="fgUnitCost" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                        <label class="block font-semibold text-slate-700 mb-1">HPP Satuan Riil (Rp)</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2 text-slate-400 font-semibold">Rp</span>
+                            <input type="number" step="0.01" name="unit_cost" x-model="unitCost" required class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-xs font-mono font-bold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        </div>
                     </div>
                 </div>
 
+                <!-- Insufficient Stock Warning -->
+                <div x-show="isStockInsufficient" class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center gap-2">
+                    <span class="text-base font-bold">⚠️</span>
+                    <div>
+                        <span class="font-bold block">Stok Barang Jadi Tidak Cukup!</span>
+                        <span class="text-[11px]">Kuantitas pemakaian (<span x-text="quantity"></span>) melebihi stok yang ada (<span x-text="currentFg ? currentFg.current_stock : 0"></span>). Harap sesuaikan kuantitas.</span>
+                    </div>
+                </div>
+
+                <!-- Subtotal Preview Card -->
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-semibold">Total Nilai Realisasi Barang Jadi:</span>
+                        <span class="font-mono font-black text-cyan-800 text-sm" x-text="'Rp ' + formatRupiah(subtotal)"></span>
+                    </div>
+                    <template x-if="currentFg">
+                        <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200">
+                            <span>Sisa Stok Pasca-Pemakaian:</span>
+                            <span class="font-mono font-bold" 
+                                  :class="(currentFg.current_stock - quantity) >= 0 ? 'text-slate-700' : 'text-rose-600'"
+                                  x-text="(currentFg.current_stock - quantity) + ' ' + currentFg.unit">
+                            </span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Catatan -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
-                    <textarea name="notes" rows="2" placeholder="Keterangan pengambilan barang..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan Pengambilan Gudang</label>
+                    <textarea name="notes" rows="2" x-model="notes" placeholder="No. DO internal, penerima, keperluan instalasi..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"></textarea>
                 </div>
 
                 <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                    <button type="button" @click="fgModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold shadow">Potong Stok & Simpan</button>
+                    <button type="button" @click="closeModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold transition">Batal</button>
+                    <button type="submit" 
+                            :disabled="isStockInsufficient || !currentFg"
+                            :class="isStockInsufficient || !currentFg ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-700 text-white shadow'"
+                            class="px-4 py-2 rounded-lg font-semibold transition flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        <span>Potong Stok & Simpan Realisasi</span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
-    <!-- MODAL 4: INPUT REALISASI OVERHEAD -->
-    <div x-show="overheadModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4" style="display: none;">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 border border-slate-100" @click.outside="overheadModalOpen = false">
+
+    <!-- ========================================================================= -->
+    <!-- MODAL 4: INPUT REALISASI OVERHEAD (MODERNIZED WITH PRESETS) -->
+    <!-- ========================================================================= -->
+    <div x-data="realizationOverheadModalController()" 
+         @open-overhead-modal.window="openModal()" 
+         x-show="isOpen" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" 
+         style="display: none;">
+        
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-100" 
+             @click.outside="closeModal()">
+            
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 class="font-bold text-slate-900 text-base">Catat Pengeluaran Overhead</h3>
-                <button @click="overheadModalOpen = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold text-sm">
+                        ⚡
+                    </span>
+                    <div>
+                        <h3 class="font-bold text-slate-900 text-base">Catat Pengeluaran Overhead</h3>
+                        <p class="text-[11px] text-slate-500">Pilih dari rencana atau gunakan tombol preset kategori cepat.</p>
+                    </div>
+                </div>
+                <button @click="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
             </div>
-            <form action="{% url 'realization_overhead_add' project.uuid %}" method="POST" class="space-y-3 text-xs">
+
+            <!-- Quick Preset Chips -->
+            <div>
+                <span class="text-[11px] font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">Pilihan Kategori Cepat:</span>
+                <div class="flex flex-wrap gap-1.5">
+                    <template x-for="p in presets" :key="p.name">
+                        <button type="button" 
+                                @click="applyPreset(p)" 
+                                class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-100 hover:bg-cyan-100 hover:text-cyan-800 text-slate-700 transition border border-slate-200"
+                                x-text="p.label">
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Source Mode Selector -->
+            <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg text-xs font-semibold">
+                <button type="button" 
+                        @click="sourceMode = 'planned'; onSelectOverhead();" 
+                        :class="sourceMode === 'planned' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        class="py-1.5 px-3 rounded-md transition text-center">
+                    📋 Overhead Terencana
+                </button>
+                <button type="button" 
+                        @click="sourceMode = 'new'; selectedOverheadUuid = ''; selectedOverheadItem = null; isAdditional = true;" 
+                        :class="sourceMode === 'new' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        class="py-1.5 px-3 rounded-md transition text-center">
+                    ➕ Biaya Baru / Tak Terduga
+                </button>
+            </div>
+
+            <form action="{% url 'realization_overhead_add' project.uuid %}" method="POST" class="space-y-3.5 text-xs">
                 {% csrf_token %}
+                <input type="hidden" name="overhead_item_uuid" :value="selectedOverheadUuid">
+
+                <!-- Tanggal Pengeluaran -->
                 <div>
                     <label class="block font-semibold text-slate-700 mb-1">Tanggal Pengeluaran</label>
-                    <input type="date" name="date" x-model="overheadDate" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <input type="date" name="date" x-model="date" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                 </div>
 
-                <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Pilih dari Rencana Overhead (Opsional)</label>
-                    <select name="overhead_item_uuid" x-model="selectedOverheadItem" @change="
-                        let opt = $event.target.selectedOptions[0];
-                        if (opt && opt.value) {
-                            overheadName = opt.getAttribute('data-name') || '';
-                            overheadCost = opt.getAttribute('data-cost') || 0;
-                            isOverheadAdditional = false;
-                        }
-                    " class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
-                        <option value="">-- [Biaya Overhead Baru / Tak Terduga] --</option>
+                <!-- Dropdown Rencana (if sourceMode === 'planned') -->
+                <div x-show="sourceMode === 'planned'" class="space-y-2">
+                    <label class="block font-semibold text-slate-700">Pilih dari Rencana Overhead</label>
+                    <select x-model="selectedOverheadUuid" @change="onSelectOverhead()" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        <option value="">-- [Pilih dari Rencana Overhead] --</option>
                         {% for o in overhead_items %}
-                        <option value="{{ o.uuid }}" data-name="{{ o.name }}" data-cost="{{ o.est_cost }}">
-                            {{ o.name }} (Est: {{ o.est_cost|rupiah }})
+                        <option value="{{ o.uuid }}">
+                            {{ o.name }} &bull; Est: Rp {{ o.est_cost|rupiah }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
 
+                <!-- Nama Pos Biaya Overhead -->
                 <div>
                     <label class="block font-semibold text-slate-700 mb-1">Nama Pos Biaya Overhead</label>
-                    <input type="text" name="expense_name" x-model="overheadName" required placeholder="Bensin armada, sewa genset, konsumsi..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs">
+                    <input type="text" name="expense_name" x-model="expenseName" required placeholder="Bensin armada, sewa genset, konsumsi lembur..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
                 </div>
 
+                <!-- Biaya Riil -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Biaya Riil (Tanpa Rp)</label>
-                    <input type="number" step="0.01" name="cost" x-model="overheadCost" required class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono">
+                    <label class="block font-semibold text-slate-700 mb-1">Biaya Riil (Rp)</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-2 text-slate-400 font-semibold">Rp</span>
+                        <input type="number" step="0.01" name="cost" x-model="cost" required class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-xs font-mono font-bold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                    </div>
                 </div>
 
-                <div class="flex items-center gap-2 pt-1">
-                    <input type="checkbox" name="is_additional" value="1" id="ovh_add" x-model="isOverheadAdditional" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
-                    <label for="ovh_add" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Biaya Tambahan</label>
+                <!-- Subtotal Preview Card -->
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-semibold">Total Biaya Overhead Riil:</span>
+                        <span class="font-mono font-black text-cyan-800 text-sm" x-text="'Rp ' + formatRupiah(cost)"></span>
+                    </div>
+                    <template x-if="selectedOverheadItem">
+                        <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200">
+                            <span>Estimasi Awal:</span>
+                            <span class="font-mono" x-text="'Rp ' + formatRupiah(selectedOverheadItem.est_cost)"></span>
+                        </div>
+                    </template>
                 </div>
 
+                <!-- Additional Checkbox -->
+                <div class="flex items-center gap-2 pt-0.5">
+                    <input type="checkbox" name="is_additional" value="1" id="ovh_add_check" x-model="isAdditional" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    <label for="ovh_add_check" class="text-slate-700 font-medium cursor-pointer">Tandai sebagai Biaya Tambahan / Tak Terduga</label>
+                </div>
+
+                <!-- Catatan -->
                 <div>
-                    <label class="block font-semibold text-slate-700 mb-1">Catatan</label>
-                    <textarea name="notes" rows="2" placeholder="Kuitansi / detail pengeluaran..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-xs"></textarea>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan / Kuitansi</label>
+                    <textarea name="notes" rows="2" x-model="notes" placeholder="No. kuitansi, nama vendor/toko, peruntukan pengeluaran..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"></textarea>
                 </div>
 
                 <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                    <button type="button" @click="overheadModalOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold shadow">Simpan Realisasi</button>
+                    <button type="button" @click="closeModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold transition">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-semibold shadow transition flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>Simpan Realisasi Overhead</span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
 </div>
+
+<!-- JSON Data Payloads for Alpine.js -->
+<script id="rawMaterialsData" type="application/json">
+{{ raw_materials_json|safe }}
+</script>
+<script id="bomItemsData" type="application/json">
+{{ bom_items_json|safe }}
+</script>
+<script id="laborItemsData" type="application/json">
+{{ labor_items_json|safe }}
+</script>
+<script id="finishedGoodsData" type="application/json">
+{{ finished_goods_json|safe }}
+</script>
+<script id="fgItemsData" type="application/json">
+{{ fg_items_json|safe }}
+</script>
+<script id="overheadItemsData" type="application/json">
+{{ overhead_items_json|safe }}
+</script>
+
+<!-- Alpine.js Controllers -->
+<script>
+function formatRupiah(val) {
+    if (!val || isNaN(val)) return '0';
+    return Math.round(Number(val)).toLocaleString('id-ID');
+}
+
+function realizationMaterialModalController() {
+    const rawMaterials = JSON.parse(document.getElementById('rawMaterialsData')?.textContent || '[]');
+    const bomItems = JSON.parse(document.getElementById('bomItemsData')?.textContent || '[]');
+
+    return {
+        isOpen: false,
+        sourceMode: 'bom', // 'bom' or 'warehouse'
+        date: new Date().toISOString().split('T')[0],
+        selectedBomUuid: '',
+        selectedBomItem: null,
+        
+        searchQuery: '',
+        selectedRawMaterial: null,
+        isComboboxOpen: false,
+
+        itemName: '',
+        unit: 'pcs',
+        qty: 1,
+        unitCost: 0,
+        isSubstitute: false,
+        notes: '',
+
+        openModal() {
+            this.isOpen = true;
+            this.resetForm();
+        },
+        closeModal() {
+            this.isOpen = false;
+        },
+        resetForm() {
+            this.sourceMode = 'bom';
+            this.date = new Date().toISOString().split('T')[0];
+            this.selectedBomUuid = '';
+            this.selectedBomItem = null;
+            this.searchQuery = '';
+            this.selectedRawMaterial = null;
+            this.isComboboxOpen = false;
+            this.itemName = '';
+            this.unit = 'pcs';
+            this.qty = 1;
+            this.unitCost = 0;
+            this.isSubstitute = false;
+            this.notes = '';
+        },
+        get filteredRawMaterials() {
+            if (!this.searchQuery.trim()) return rawMaterials.slice(0, 15);
+            const q = this.searchQuery.toLowerCase();
+            return rawMaterials.filter(rm => 
+                rm.name.toLowerCase().includes(q) || 
+                rm.code.toLowerCase().includes(q) ||
+                (rm.category && rm.category.toLowerCase().includes(q))
+            ).slice(0, 15);
+        },
+        onSelectBom() {
+            const found = bomItems.find(b => b.uuid === this.selectedBomUuid);
+            if (found) {
+                this.selectedBomItem = found;
+                this.itemName = found.name;
+                this.unit = found.unit;
+                this.qty = found.est_qty || 1;
+                this.unitCost = found.est_unit_cost || 0;
+                this.isSubstitute = false;
+                this.selectedRawMaterial = null;
+                this.searchQuery = '';
+            } else {
+                this.selectedBomItem = null;
+            }
+        },
+        selectRawMaterial(rm) {
+            this.selectedRawMaterial = rm;
+            this.searchQuery = '[' + rm.code + '] ' + rm.name;
+            this.isComboboxOpen = false;
+            this.itemName = rm.name;
+            this.unit = rm.stock_unit;
+            this.unitCost = rm.last_purchase_price || 0;
+            this.isSubstitute = true;
+            this.selectedBomUuid = '';
+            this.selectedBomItem = null;
+        },
+        clearRawMaterial() {
+            this.selectedRawMaterial = null;
+            this.searchQuery = '';
+            this.itemName = '';
+            this.unitCost = 0;
+        },
+        get currentStock() {
+            if (this.selectedRawMaterial) {
+                return this.selectedRawMaterial.current_stock;
+            }
+            if (this.selectedBomItem && this.selectedBomItem.raw_material_uuid) {
+                return this.selectedBomItem.current_stock;
+            }
+            return null;
+        },
+        get currentStockUnit() {
+            if (this.selectedRawMaterial) {
+                return this.selectedRawMaterial.stock_unit;
+            }
+            if (this.selectedBomItem && this.selectedBomItem.raw_material_uuid) {
+                return this.selectedBomItem.stock_unit;
+            }
+            return this.unit;
+        },
+        get isStockExceeded() {
+            const stock = this.currentStock;
+            if (stock !== null && stock !== undefined && stock > 0) {
+                return Number(this.qty) > stock;
+            }
+            return false;
+        },
+        get subtotal() {
+            return (Number(this.qty) || 0) * (Number(this.unitCost) || 0);
+        },
+        get estSubtotal() {
+            if (this.selectedBomItem) {
+                return (Number(this.selectedBomItem.est_qty) || 0) * (Number(this.selectedBomItem.est_unit_cost) || 0);
+            }
+            return null;
+        },
+        get diffSubtotal() {
+            if (this.estSubtotal !== null) {
+                return this.subtotal - this.estSubtotal;
+            }
+            return 0;
+        }
+    };
+}
+
+function realizationLaborModalController() {
+    const laborItems = JSON.parse(document.getElementById('laborItemsData')?.textContent || '[]');
+
+    return {
+        isOpen: false,
+        sourceMode: 'planned',
+        date: new Date().toISOString().split('T')[0],
+        selectedLaborUuid: '',
+        selectedLaborItem: null,
+
+        roleName: '',
+        unit: 'jam',
+        quantity: 8,
+        rate: 0,
+        isAdditional: false,
+        notes: '',
+
+        openModal() {
+            this.isOpen = true;
+            this.resetForm();
+        },
+        closeModal() {
+            this.isOpen = false;
+        },
+        resetForm() {
+            this.sourceMode = 'planned';
+            this.date = new Date().toISOString().split('T')[0];
+            this.selectedLaborUuid = '';
+            this.selectedLaborItem = null;
+            this.roleName = '';
+            this.unit = 'jam';
+            this.quantity = 8;
+            this.rate = 0;
+            this.isAdditional = false;
+            this.notes = '';
+        },
+        onSelectLabor() {
+            const found = laborItems.find(l => l.uuid === this.selectedLaborUuid);
+            if (found) {
+                this.selectedLaborItem = found;
+                this.roleName = found.role_name;
+                this.unit = found.unit;
+                this.quantity = found.est_quantity || 8;
+                this.rate = found.est_rate || 0;
+                this.isAdditional = false;
+            } else {
+                this.selectedLaborItem = null;
+            }
+        },
+        get subtotal() {
+            return (Number(this.quantity) || 0) * (Number(this.rate) || 0);
+        },
+        get estSubtotal() {
+            if (this.selectedLaborItem) {
+                return (Number(this.selectedLaborItem.est_quantity) || 0) * (Number(this.selectedLaborItem.est_rate) || 0);
+            }
+            return null;
+        }
+    };
+}
+
+function realizationFgModalController() {
+    const finishedGoods = JSON.parse(document.getElementById('finishedGoodsData')?.textContent || '[]');
+    const fgItems = JSON.parse(document.getElementById('fgItemsData')?.textContent || '[]');
+
+    return {
+        isOpen: false,
+        sourceMode: 'project',
+        date: new Date().toISOString().split('T')[0],
+        selectedProjectFgUuid: '',
+        selectedFgItem: null,
+
+        searchQuery: '',
+        selectedFgMaster: null,
+        isComboboxOpen: false,
+
+        quantity: 1,
+        unitCost: 0,
+        notes: '',
+
+        openModal() {
+            this.isOpen = true;
+            this.resetForm();
+        },
+        closeModal() {
+            this.isOpen = false;
+        },
+        resetForm() {
+            this.sourceMode = 'project';
+            this.date = new Date().toISOString().split('T')[0];
+            this.selectedProjectFgUuid = '';
+            this.selectedFgItem = null;
+            this.searchQuery = '';
+            this.selectedFgMaster = null;
+            this.isComboboxOpen = false;
+            this.quantity = 1;
+            this.unitCost = 0;
+            this.notes = '';
+        },
+        get filteredMasterFgs() {
+            if (!this.searchQuery.trim()) return finishedGoods.slice(0, 15);
+            const q = this.searchQuery.toLowerCase();
+            return finishedGoods.filter(fg =>
+                fg.name.toLowerCase().includes(q) ||
+                fg.sku.toLowerCase().includes(q)
+            ).slice(0, 15);
+        },
+        onSelectProjectFg() {
+            const found = fgItems.find(pfg => pfg.uuid === this.selectedProjectFgUuid);
+            if (found) {
+                this.selectedFgItem = found;
+                this.quantity = 1;
+                this.unitCost = found.est_unit_cost || 0;
+                this.selectedFgMaster = null;
+                this.searchQuery = '';
+            } else {
+                this.selectedFgItem = null;
+            }
+        },
+        selectFgMaster(fg) {
+            this.selectedFgMaster = fg;
+            this.searchQuery = '[' + fg.sku + '] ' + fg.name;
+            this.isComboboxOpen = false;
+            this.unitCost = fg.standard_cost || 0;
+            this.selectedProjectFgUuid = '';
+            this.selectedFgItem = null;
+        },
+        clearFgMaster() {
+            this.selectedFgMaster = null;
+            this.searchQuery = '';
+            this.unitCost = 0;
+        },
+        get currentFg() {
+            if (this.selectedFgItem) {
+                return {
+                    name: this.selectedFgItem.name,
+                    sku: this.selectedFgItem.sku,
+                    unit: this.selectedFgItem.unit,
+                    current_stock: this.selectedFgItem.current_stock
+                };
+            }
+            if (this.selectedFgMaster) {
+                return {
+                    name: this.selectedFgMaster.name,
+                    sku: this.selectedFgMaster.sku,
+                    unit: this.selectedFgMaster.unit,
+                    current_stock: this.selectedFgMaster.current_stock
+                };
+            }
+            return null;
+        },
+        get isStockInsufficient() {
+            if (this.currentFg) {
+                return Number(this.quantity) > this.currentFg.current_stock;
+            }
+            return false;
+        },
+        get subtotal() {
+            return (Number(this.quantity) || 0) * (Number(this.unitCost) || 0);
+        }
+    };
+}
+
+function realizationOverheadModalController() {
+    const overheadItems = JSON.parse(document.getElementById('overheadItemsData')?.textContent || '[]');
+
+    return {
+        isOpen: false,
+        sourceMode: 'planned',
+        date: new Date().toISOString().split('T')[0],
+        selectedOverheadUuid: '',
+        selectedOverheadItem: null,
+
+        expenseName: '',
+        cost: 0,
+        isAdditional: false,
+        notes: '',
+
+        presets: [
+            { label: '⚡ Listrik & Air', name: 'Biaya Listrik & Air Operasional' },
+            { label: '🛠️ Sewa Mesin/Alat', name: 'Sewa Alat & Mesin Khusus' },
+            { label: '🚚 Transport & Logistik', name: 'BBM & Transportasi Logistik' },
+            { label: '🏭 Maklon / Subkon', name: 'Jasa Maklon Subkontraktor' },
+            { label: '🍱 Konsumsi Lapangan', name: 'Konsumsi & Lembur Lapangan' },
+            { label: '📦 Packaging & Wrapping', name: 'Packaging, Bubble Wrap & Lakban' }
+        ],
+
+        openModal() {
+            this.isOpen = true;
+            this.resetForm();
+        },
+        closeModal() {
+            this.isOpen = false;
+        },
+        resetForm() {
+            this.sourceMode = 'planned';
+            this.date = new Date().toISOString().split('T')[0];
+            this.selectedOverheadUuid = '';
+            this.selectedOverheadItem = null;
+            this.expenseName = '';
+            this.cost = 0;
+            this.isAdditional = false;
+            this.notes = '';
+        },
+        applyPreset(preset) {
+            this.sourceMode = 'new';
+            this.selectedOverheadUuid = '';
+            this.selectedOverheadItem = null;
+            this.expenseName = preset.name;
+            this.isAdditional = true;
+        },
+        onSelectOverhead() {
+            const found = overheadItems.find(o => o.uuid === this.selectedOverheadUuid);
+            if (found) {
+                this.selectedOverheadItem = found;
+                this.expenseName = found.name;
+                this.cost = found.est_cost || 0;
+                this.isAdditional = false;
+                if (found.notes) this.notes = found.notes;
+            } else {
+                this.selectedOverheadItem = null;
+            }
+        }
+    };
+}
+</script>
 {% endblock %}
+

@@ -1,13 +1,40 @@
-﻿from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
-from decimal import Decimal
+from django.db import transaction
 from django.db.models import Q
+from decimal import Decimal
+import json
 from .models import (
     UnitMaster,
     Project, BOMItem, ProjectLabor, ProjectOverhead, FinishedGood,
     ProjectFinishedGood, BOMItemRealization, LaborRealization,
     FinishedGoodRealization, OverheadRealization, RawMaterial
 )
+
+
+def _clean_decimal(val_str, default=Decimal(0)):
+    if not val_str:
+        return default
+    if isinstance(val_str, (int, float, Decimal)):
+        return Decimal(str(val_str))
+    cleaned = str(val_str).strip()
+    cleaned = cleaned.replace("Rp", "").replace("rp", "").replace("RP", "").strip()
+    cleaned = cleaned.replace(" ", "")
+    if "." in cleaned and "," in cleaned:
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    elif "," in cleaned and "." not in cleaned:
+        cleaned = cleaned.replace(",", ".")
+    elif "." in cleaned:
+        parts = cleaned.split(".")
+        if len(parts) > 2:
+            cleaned = "".join(parts[:-1]) + "." + parts[-1]
+        elif len(parts) == 2 and len(parts[1]) == 3:
+            cleaned = cleaned.replace(".", "")
+    try:
+        return Decimal(cleaned)
+    except Exception:
+        return default
+
 
 def project_realization_list(request):
     query = request.GET.get("q", "").strip()
@@ -26,9 +53,10 @@ def project_realization_list(request):
         "status_choices": Project.STATUS_CHOICES,
     })
 
+
 def project_realization_detail(request, uuid):
     project = get_object_or_404(Project, uuid=uuid)
-    bom_items = project.bom_items.filter(item_type="material").select_related("material_master")
+    bom_items = project.bom_items.filter(item_type="material").select_related("material_master", "raw_material")
     labor_items = project.labor_items.all().select_related("labor_master")
     fg_items = project.finished_good_items.all().select_related("finished_good")
     overhead_items = project.overhead_items.all()
@@ -40,6 +68,95 @@ def project_realization_detail(request, uuid):
     labor_realizations = project.labor_realizations.all().select_related("project_labor")
     fg_realizations = project.finished_good_realizations.all().select_related("project_fg", "finished_good")
     overhead_realizations = project.overhead_realizations.all().select_related("project_overhead")
+
+    # Serialize Master Raw Materials
+    raw_materials_list = []
+    for rm in master_raw_materials:
+        raw_materials_list.append({
+            "uuid": str(rm.uuid),
+            "code": rm.code,
+            "name": rm.name,
+            "category": rm.category or "Umum",
+            "stock_unit": rm.stock_unit,
+            "current_stock": float(rm.current_stock),
+            "last_purchase_price": float(rm.last_purchase_price),
+            "conversions": [
+                {
+                    "unit_name": c.unit_name,
+                    "conversion_factor": float(c.conversion_factor)
+                } for c in rm.conversions.all()
+            ]
+        })
+
+    # Serialize Planned BOM Items
+    bom_items_list = []
+    for b in bom_items:
+        rm = b.raw_material
+        if not rm and b.name:
+            rm = RawMaterial.objects.filter(name__iexact=b.name.strip()).first()
+        rm_uuid = str(rm.uuid) if rm else ""
+        current_stock = float(rm.current_stock) if rm else 0
+        stock_unit = rm.stock_unit if rm else b.unit
+        bom_items_list.append({
+            "uuid": str(b.uuid),
+            "name": b.name,
+            "unit": b.unit,
+            "est_qty": float(b.est_qty),
+            "est_unit_cost": float(b.est_unit_cost),
+            "raw_material_uuid": rm_uuid,
+            "current_stock": current_stock,
+            "stock_unit": stock_unit,
+        })
+
+    # Serialize Planned Labor Items
+    labor_items_list = []
+    for l in labor_items:
+        labor_items_list.append({
+            "uuid": str(l.uuid),
+            "role_name": l.role_name,
+            "unit": l.unit,
+            "est_quantity": float(l.est_quantity),
+            "est_rate": float(l.est_rate),
+        })
+
+    # Serialize Master Finished Goods
+    finished_goods_list = []
+    for fg in master_finished_goods:
+        finished_goods_list.append({
+            "uuid": str(fg.uuid),
+            "sku": fg.sku,
+            "name": fg.name,
+            "unit": fg.unit,
+            "current_stock": float(fg.current_stock),
+            "standard_cost": float(fg.standard_cost),
+        })
+
+    # Serialize Planned FG Items
+    fg_items_list = []
+    for pfg in fg_items:
+        fg_items_list.append({
+            "uuid": str(pfg.uuid),
+            "fg_uuid": str(pfg.finished_good.uuid),
+            "sku": pfg.finished_good.sku,
+            "name": pfg.finished_good.name,
+            "unit": pfg.finished_good.unit,
+            "est_qty": float(pfg.est_qty),
+            "est_unit_cost": float(pfg.est_unit_cost),
+            "current_stock": float(pfg.finished_good.current_stock),
+        })
+
+    # Serialize Planned Overhead Items
+    overhead_items_list = []
+    for o in overhead_items:
+        overhead_items_list.append({
+            "uuid": str(o.uuid),
+            "name": o.name,
+            "est_cost": float(o.est_cost),
+            "notes": o.notes or "",
+        })
+
+    unit_materials = UnitMaster.objects.filter(category="raw_material", is_active=True).order_by("name")
+    unit_labors = UnitMaster.objects.filter(category="labor", is_active=True).order_by("name")
 
     return render(request, "hpp/project_realization_detail.html", {
         "project": project,
@@ -53,8 +170,18 @@ def project_realization_detail(request, uuid):
         "labor_realizations": labor_realizations,
         "fg_realizations": fg_realizations,
         "overhead_realizations": overhead_realizations,
+        "raw_materials_json": json.dumps(raw_materials_list),
+        "bom_items_json": json.dumps(bom_items_list),
+        "labor_items_json": json.dumps(labor_items_list),
+        "finished_goods_json": json.dumps(finished_goods_list),
+        "fg_items_json": json.dumps(fg_items_list),
+        "overhead_items_json": json.dumps(overhead_items_list),
+        "unit_materials": unit_materials,
+        "unit_labors": unit_labors,
     })
 
+
+@transaction.atomic
 def realization_bom_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
@@ -63,8 +190,8 @@ def realization_bom_add(request, project_uuid):
         date = request.POST.get("date")
         item_name = request.POST.get("item_name", "").strip()
         unit = request.POST.get("unit", "pcs").strip()
-        qty = Decimal(request.POST.get("qty") or 0)
-        unit_cost = Decimal(request.POST.get("unit_cost") or 0)
+        qty = _clean_decimal(request.POST.get("qty"), Decimal(0))
+        unit_cost = _clean_decimal(request.POST.get("unit_cost"), Decimal(0))
         is_substitute = request.POST.get("is_substitute") == "1"
         notes = request.POST.get("notes", "").strip()
 
@@ -73,10 +200,13 @@ def realization_bom_add(request, project_uuid):
 
         if bom_item_uuid:
             bom_item = BOMItem.objects.filter(uuid=bom_item_uuid, project=project).first()
-            if bom_item and not item_name:
-                item_name = bom_item.name
+            if bom_item:
+                if not item_name:
+                    item_name = bom_item.name
                 if not unit:
                     unit = bom_item.unit
+                if bom_item.raw_material and not raw_material_uuid:
+                    raw_material = bom_item.raw_material
 
         if raw_material_uuid:
             raw_material = RawMaterial.objects.filter(uuid=raw_material_uuid).first()
@@ -108,16 +238,21 @@ def realization_bom_add(request, project_uuid):
             is_substitute=is_substitute,
             notes=notes,
         )
-        messages.success(request, f"Realisasi material '{item_name}' ({qty} {unit}) berhasil disimpan & stok diperbarui.")
+        messages.success(request, f"Realisasi material '{item_name}' ({qty} {unit}) berhasil disimpan & mutasi stok dicatat.")
     return redirect("project_realization_detail", uuid=project.uuid)
 
+
+@transaction.atomic
 def realization_bom_delete(request, uuid):
     realization = get_object_or_404(BOMItemRealization, uuid=uuid)
     project_uuid = realization.project.uuid
+    item_name = realization.item_name
     realization.delete()
-    messages.success(request, "Log realisasi material berhasil dibatalkan dan stok dikembalikan.")
+    messages.success(request, f"Log realisasi material '{item_name}' berhasil dibatalkan dan stok dikembalikan.")
     return redirect("project_realization_detail", uuid=project_uuid)
 
+
+@transaction.atomic
 def realization_labor_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
@@ -125,20 +260,26 @@ def realization_labor_add(request, project_uuid):
         date = request.POST.get("date")
         role_name = request.POST.get("role_name", "").strip()
         unit = request.POST.get("unit", "jam").strip()
-        quantity = Decimal(request.POST.get("quantity") or 0)
-        rate = Decimal(request.POST.get("rate") or 0)
+        quantity = _clean_decimal(request.POST.get("quantity"), Decimal(0))
+        rate = _clean_decimal(request.POST.get("rate"), Decimal(0))
         is_additional = request.POST.get("is_additional") == "1"
         notes = request.POST.get("notes", "").strip()
 
         project_labor = None
         if labor_item_uuid:
             project_labor = ProjectLabor.objects.filter(uuid=labor_item_uuid, project=project).first()
-            if project_labor and not role_name:
-                role_name = project_labor.role_name
-                unit = project_labor.unit
+            if project_labor:
+                if not role_name:
+                    role_name = project_labor.role_name
+                if not unit:
+                    unit = project_labor.unit
+
+        if not role_name:
+            messages.error(request, "Nama/Peran tenaga kerja harus diisi.")
+            return redirect("project_realization_detail", uuid=project.uuid)
 
         if quantity <= 0:
-            messages.error(request, "Jumlah tenaga kerja harus lebih besar dari 0.")
+            messages.error(request, "Jumlah/durasi tenaga kerja harus lebih besar dari 0.")
             return redirect("project_realization_detail", uuid=project.uuid)
 
         LaborRealization.objects.create(
@@ -155,21 +296,26 @@ def realization_labor_add(request, project_uuid):
         messages.success(request, f"Realisasi tenaga kerja '{role_name}' ({quantity} {unit}) berhasil disimpan.")
     return redirect("project_realization_detail", uuid=project.uuid)
 
+
+@transaction.atomic
 def realization_labor_delete(request, uuid):
     realization = get_object_or_404(LaborRealization, uuid=uuid)
     project_uuid = realization.project.uuid
+    role_name = realization.role_name
     realization.delete()
-    messages.success(request, "Log realisasi tenaga kerja berhasil dihapus.")
+    messages.success(request, f"Log realisasi tenaga kerja '{role_name}' berhasil dihapus.")
     return redirect("project_realization_detail", uuid=project_uuid)
 
+
+@transaction.atomic
 def realization_fg_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
         project_fg_uuid = request.POST.get("project_fg_uuid", "").strip()
         fg_uuid = request.POST.get("fg_uuid", "").strip()
         date = request.POST.get("date")
-        quantity = Decimal(request.POST.get("quantity") or 0)
-        unit_cost = Decimal(request.POST.get("unit_cost") or 0)
+        quantity = _clean_decimal(request.POST.get("quantity"), Decimal(0))
+        unit_cost = _clean_decimal(request.POST.get("unit_cost"), Decimal(0))
         notes = request.POST.get("notes", "").strip()
 
         project_fg = None
@@ -210,20 +356,25 @@ def realization_fg_add(request, project_uuid):
         messages.success(request, f"Realisasi {finished_good.name} ({quantity} {finished_good.unit}) berhasil dicatat dan memotong stock.")
     return redirect("project_realization_detail", uuid=project.uuid)
 
+
+@transaction.atomic
 def realization_fg_delete(request, uuid):
     realization = get_object_or_404(FinishedGoodRealization, uuid=uuid)
     project_uuid = realization.project.uuid
+    fg_name = realization.finished_good.name
     realization.delete()
-    messages.success(request, "Log realisasi barang jadi dibatalkan dan stock telah dikembalikan.")
+    messages.success(request, f"Log realisasi barang jadi '{fg_name}' dibatalkan dan stock telah dikembalikan.")
     return redirect("project_realization_detail", uuid=project_uuid)
 
+
+@transaction.atomic
 def realization_overhead_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
         overhead_item_uuid = request.POST.get("overhead_item_uuid", "").strip()
         date = request.POST.get("date")
         expense_name = request.POST.get("expense_name", "").strip()
-        cost = Decimal(request.POST.get("cost") or 0)
+        cost = _clean_decimal(request.POST.get("cost"), Decimal(0))
         is_additional = request.POST.get("is_additional") == "1"
         notes = request.POST.get("notes", "").strip()
 
@@ -232,6 +383,10 @@ def realization_overhead_add(request, project_uuid):
             project_overhead = ProjectOverhead.objects.filter(uuid=overhead_item_uuid, project=project).first()
             if project_overhead and not expense_name:
                 expense_name = project_overhead.name
+
+        if not expense_name:
+            messages.error(request, "Nama pos pengeluaran overhead harus diisi.")
+            return redirect("project_realization_detail", uuid=project.uuid)
 
         if cost <= 0:
             messages.error(request, "Biaya overhead harus lebih besar dari 0.")
@@ -249,9 +404,13 @@ def realization_overhead_add(request, project_uuid):
         messages.success(request, f"Realisasi overhead '{expense_name}' berhasil disimpan.")
     return redirect("project_realization_detail", uuid=project.uuid)
 
+
+@transaction.atomic
 def realization_overhead_delete(request, uuid):
     realization = get_object_or_404(OverheadRealization, uuid=uuid)
     project_uuid = realization.project.uuid
+    expense_name = realization.expense_name
     realization.delete()
-    messages.success(request, "Log realisasi overhead berhasil dihapus.")
+    messages.success(request, f"Log realisasi overhead '{expense_name}' berhasil dihapus.")
     return redirect("project_realization_detail", uuid=project_uuid)
+
