@@ -174,6 +174,7 @@ class Project(models.Model):
     stock_released = models.BooleanField(default=False)
     start_date = models.DateField(null=True, blank=True)
     target_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -277,6 +278,7 @@ class BOMItem(models.Model):
     parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="children")
     item_type = models.CharField(max_length=20, choices=ITEM_TYPES, default="material")
     material_master = models.ForeignKey(MaterialMaster, on_delete=models.SET_NULL, null=True, blank=True)
+    raw_material = models.ForeignKey('RawMaterial', on_delete=models.SET_NULL, null=True, blank=True, related_name="bom_items")
     name = models.CharField(max_length=200)
     unit = models.CharField(max_length=50, default="pcs")
     
@@ -289,12 +291,17 @@ class BOMItem(models.Model):
     notes = models.TextField(blank=True, default="")
 
     def save(self, *args, **kwargs):
-        if self.item_type == "material" and not self.material_master and self.name:
-            master, _ = MaterialMaster.objects.get_or_create(
-                name=self.name.strip(),
-                defaults={"unit": self.unit or "pcs", "standard_cost": self.est_unit_cost or 0}
-            )
-            self.material_master = master
+        if self.item_type == "material":
+            if not self.raw_material and self.name:
+                rm = RawMaterial.objects.filter(name__iexact=self.name.strip()).first()
+                if rm:
+                    self.raw_material = rm
+            if not self.material_master and self.name:
+                master, _ = MaterialMaster.objects.get_or_create(
+                    name=self.name.strip(),
+                    defaults={"unit": self.unit or "pcs", "standard_cost": self.est_unit_cost or 0}
+                )
+                self.material_master = master
         super().save(*args, **kwargs)
 
     @property

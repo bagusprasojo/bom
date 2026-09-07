@@ -178,7 +178,9 @@
                                 est_unit_cost: '{{ m.est_unit_cost }}',
                                 act_qty: '{{ m.act_qty }}',
                                 act_unit_cost: '{{ m.act_unit_cost }}',
-                                parent_uuid: '{{ m.parent.uuid|default:'' }}'
+                                parent_uuid: '{{ m.parent.uuid|default:'' }}',
+                                notes: '{{ m.notes|escapejs }}',
+                                raw_material_uuid: '{{ m.raw_material.uuid|default:'' }}'
                             }; editBomModal = true" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs px-1">Edit</button>
                             <span class="text-slate-300">|</span>
                             <form action="{% url 'bom_item_delete' m.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus item ini?')">
@@ -449,45 +451,177 @@
         </div>
     </div>
 
-    <!-- MODAL: Add BOM Item -->
-    <div x-show="addBomModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div @click.away="addBomModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4" x-data="{ selectedMaster: '', nameInput: '', unitInput: 'pcs', estCostInput: 0 }">
-            <h3 class="text-lg font-bold text-slate-900">Tambah Item BOM</h3>
-            <form action="{% url 'bom_item_add' project.uuid %}" method="POST" class="space-y-3">
-                {% csrf_token %}
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tipe Item</label>
-                        <select name="item_type" class="w-full rounded border border-slate-300 p-2 text-sm">
-                            <option value="material">Material Mentah</option>
-                            <option value="assembly">Sub-Assembly (Rakitan)</option>
-                        </select>
+    <!-- MODAL: Add BOM Item (Modernized with RawMaterial Autocomplete & Live Subtotal) -->
+    <div x-show="addBomModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="addBomModal = false" 
+             class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4"
+             x-data="bomAddModalController()">
+            
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Pilih Master (Opsional)</label>
-                        <select class="w-full rounded border border-slate-300 p-2 text-sm" 
-                                @change="if($event.target.value){ 
-                                    let opt = $event.target.options[$event.target.selectedIndex]; 
-                                    nameInput = opt.dataset.name; 
-                                    unitInput = opt.dataset.unit; 
-                                    estCostInput = opt.dataset.cost; 
-                                }">
-                            <option value="">-- Ketik Bebas / Pilih Master --</option>
-                            {% for mm in master_materials %}
-                            <option value="{{ mm.id }}" data-name="{{ mm.name }}" data-unit="{{ mm.unit }}" data-cost="{{ mm.standard_cost }}">{{ mm.name }} ({{ mm.unit }})</option>
-                            {% endfor %}
-                        </select>
+                        <h3 class="text-base font-bold text-slate-900">Tambah Item Bill of Materials (BOM)</h3>
+                        <p class="text-xs text-slate-500">Pilih bahan baku dari gudang atau buat komponen sub-assembly rakitan.</p>
+                    </div>
+                </div>
+                <button type="button" @click="addBomModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form action="{% url 'bom_item_add' project.uuid %}" method="POST" class="space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="item_type" :value="itemType">
+                <input type="hidden" name="raw_material_uuid" :value="rawMaterialUuid">
+
+                <!-- Tipe Item Pill Selector -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Tipe Komponen</label>
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                        <button type="button" 
+                                @click="itemType = 'material'" 
+                                class="py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2"
+                                :class="itemType === 'material' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200' : 'text-slate-600 hover:text-slate-900'">
+                            <span class="w-2 h-2 rounded-full" :class="itemType === 'material' ? 'bg-indigo-600' : 'bg-slate-400'"></span>
+                            Material / Bahan Mentah
+                        </button>
+                        <button type="button" 
+                                @click="itemType = 'assembly'; clearRawMaterial();" 
+                                class="py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2"
+                                :class="itemType === 'assembly' ? 'bg-white text-purple-700 shadow-sm border border-slate-200' : 'text-slate-600 hover:text-slate-900'">
+                            <span class="w-2 h-2 rounded-full" :class="itemType === 'assembly' ? 'bg-purple-600' : 'bg-slate-400'"></span>
+                            Sub-Assembly (Rakitan)
+                        </button>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-3 gap-2">
-                    <div class="col-span-2">
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Item / Part *</label>
-                        <input type="text" name="name" x-model="nameInput" required placeholder="Contoh: Besi Hollow 4x4" class="w-full rounded border border-slate-300 p-2 text-sm">
+                <!-- SECTION: Material Mentah -->
+                <div x-show="itemType === 'material'" class="space-y-3">
+                    <!-- Autocomplete Combobox Bahan Baku -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                Pilih Bahan Baku dari Gudang <span class="text-slate-400 font-normal normal-case">(Opsional / Ketik Bebas)</span>
+                            </label>
+                            <a href="{% url 'raw_material_list' %}" target="_blank" class="text-[11px] font-bold text-indigo-600 hover:underline">
+                                + Master Bahan
+                            </a>
+                        </div>
+
+                        <div class="relative" @click.outside="rmDropdownOpen = false">
+                            <div class="relative">
+                                <input type="text" 
+                                       x-model="searchRm"
+                                       @focus="rmDropdownOpen = true"
+                                       @input="rawMaterialUuid = ''; selectedRm = null; nameInput = searchRm; rmDropdownOpen = true"
+                                       placeholder="Ketik nama, kode, atau kategori bahan baku..."
+                                       class="w-full rounded-lg border border-slate-300 pl-3.5 pr-16 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition placeholder-slate-400">
+
+                                <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+                                    <button type="button" 
+                                            x-show="searchRm" 
+                                            @click="clearRawMaterial()" 
+                                            class="p-1 text-slate-400 hover:text-slate-600 transition"
+                                            title="Hapus">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                    <button type="button" 
+                                            @click="rmDropdownOpen = !rmDropdownOpen" 
+                                            class="p-1 text-slate-400 hover:text-slate-600 transition">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Options dropdown -->
+                            <div x-show="rmDropdownOpen" 
+                                 x-transition:enter="transition ease-out duration-150"
+                                 x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:enter-end="opacity-100 scale-100"
+                                 class="absolute z-30 mt-1.5 w-full bg-white rounded-xl shadow-xl border border-slate-200 max-h-56 overflow-y-auto divide-y divide-slate-100"
+                                 style="display: none;">
+                                <template x-for="rm in filteredRawMaterials" :key="rm.uuid">
+                                    <div @click="selectRawMaterial(rm)" 
+                                         class="p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between transition group"
+                                         :class="rawMaterialUuid === rm.uuid ? 'bg-indigo-50 font-semibold' : ''">
+                                        <div>
+                                            <div class="text-sm font-semibold text-slate-800 group-hover:text-indigo-900" x-text="rm.name"></div>
+                                            <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                                <span class="font-mono bg-slate-100 px-1.5 py-0.2 rounded" x-text="rm.code"></span>
+                                                <span x-text="rm.category"></span>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-xs font-bold text-slate-800" x-text="'Stok: ' + rm.current_stock + ' ' + rm.stock_unit"></div>
+                                            <div class="text-[11px] text-emerald-600 font-semibold" x-text="formatRupiah(rm.last_purchase_price) + ' / ' + rm.stock_unit"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="filteredRawMaterials.length === 0" class="p-3 text-center text-xs text-slate-400">
+                                    Bahan tidak ditemukan. Anda tetap dapat mengetik nama bebas di bawah.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Real-time Stock & Price Indicator Card -->
+                        <div x-show="selectedRm" class="mt-2 p-3 bg-indigo-50/70 rounded-xl border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div class="flex items-center gap-2 text-xs text-indigo-950 font-medium">
+                                <svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span>Gudang: <strong x-text="selectedRm ? (selectedRm.current_stock + ' ' + selectedRm.stock_unit) : ''"></strong> | Harga Beli Terakhir: <strong x-text="selectedRm ? formatRupiah(selectedRm.last_purchase_price) : ''"></strong></span>
+                            </div>
+                            <div x-show="selectedRm && estQty > selectedRm.current_stock" class="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                                ⚠️ Melebihi stok saat ini
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION: Sub-Assembly Note -->
+                <div x-show="itemType === 'assembly'" class="p-3 bg-purple-50 rounded-xl border border-purple-200 text-xs text-purple-900 space-y-1">
+                    <div class="font-bold flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                        Komponen Rakitan Bertingkat (Sub-Assembly)
+                    </div>
+                    <p class="text-[11px] text-purple-700">Sub-Assembly berfungsi sebagai grup induk komponen (contoh: Rangka Meja, Pintu Lemari). Estimasi biaya akan dihitung otomatis dari akumulasi material di bawahnya.</p>
+                </div>
+
+                <!-- Nama Item & Satuan -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            Nama Item / Komponen <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text" name="name" x-model="nameInput" required 
+                               placeholder="Contoh: Kayu Jati Perhutani Tebal 3cm" 
+                               class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
-                        <select name="unit" x-model="unitInput" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Satuan</label>
+                        <select name="unit" x-model="unitInput" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                             {% for u in unit_materials %}
                             <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
                             {% empty %}
@@ -496,14 +630,16 @@
                             <option value="lembar">Lembar (lembar)</option>
                             <option value="kg">Kilogram (kg)</option>
                             <option value="meter">Meter (meter)</option>
+                            <option value="set">Set (set)</option>
                             {% endfor %}
                         </select>
                     </div>
                 </div>
 
+                <!-- Sub-Assembly Induk (Parent) -->
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Sub-Assembly Induk (Jika Rakitan Bertingkat)</label>
-                    <select name="parent_uuid" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Sub-Assembly Induk</label>
+                    <select name="parent_uuid" class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700">
                         <option value="">-- Level Teratas (Bukan Bagian Rakitan Lain) --</option>
                         {% for m in materials %}
                         {% if m.item_type == 'assembly' %}
@@ -513,50 +649,89 @@
                     </select>
                 </div>
 
-                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                    <span class="text-xs font-bold text-slate-700">Estimasi Kebutuhan</span>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-[11px] text-slate-500">Estimasi Qty</label>
-                            <input type="number" step="0.01" name="est_qty" value="1" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                <!-- Estimasi Kebutuhan (Qty & Cost) & Live Subtotal -->
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Estimasi Biaya & Kuantitas</span>
+                        <div x-show="itemType === 'material'" class="text-right">
+                            <span class="text-[11px] text-slate-500">Estimasi Subtotal:</span>
+                            <span class="text-sm font-bold text-indigo-700 font-mono ml-1" x-text="formatRupiah(subtotal)"></span>
                         </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-[11px] text-slate-500">Est. Harga Satuan (Rp)</label>
-                            <input type="number" step="0.01" name="est_unit_cost" x-model="estCostInput" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Kuantitas Estimasi</label>
+                            <input type="number" step="0.01" min="0" name="est_qty" x-model.number="estQty" 
+                                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div x-show="itemType === 'material'">
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Est. Harga Satuan (Rp)</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-xs">Rp</span>
+                                <input type="number" step="1" min="0" name="est_unit_cost" x-model.number="estCostInput" 
+                                       class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <div x-show="itemType === 'assembly'" class="flex items-center text-xs text-purple-700 italic">
+                            * Biaya rakitan diakumulasi otomatis dari sub-item.
                         </div>
                     </div>
                 </div>
 
-                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan</label>
-                    <input type="text" name="notes" placeholder="Catatan spesifikasi..." class="w-full rounded border border-slate-300 p-2 text-sm">
+                <!-- Catatan Spesifikasi -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Catatan / Spesifikasi Teknis</label>
+                    <input type="text" name="notes" placeholder="Contoh: Grade A, ukuran potong 120 x 80 cm" 
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" @click="addBomModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Simpan ke BOM</button>
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="addBomModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow transition">
+                        Simpan ke BOM
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- MODAL: Edit BOM Item -->
-    <div x-show="editBomModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div @click.away="editBomModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
-            <h3 class="text-lg font-bold text-slate-900">Edit Item BOM</h3>
-            <form :action="'/bom/' + currentBom.id + '/update/'" method="POST" class="space-y-3">
+    <div x-show="editBomModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="editBomModal = false" class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Edit Item BOM</h3>
+                <button type="button" @click="editBomModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form :action="'/bom/' + currentBom.id + '/update/'" method="POST" class="space-y-4">
                 {% csrf_token %}
-                <div class="grid grid-cols-2 gap-2">
+                <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tipe Item</label>
-                        <select name="item_type" x-model="currentBom.item_type" class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Tipe Item</label>
+                        <select name="item_type" x-model="currentBom.item_type" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                             <option value="material">Material Mentah</option>
                             <option value="assembly">Sub-Assembly (Rakitan)</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Satuan</label>
-                        <select name="unit" x-model="currentBom.unit" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Satuan</label>
+                        <select name="unit" x-model="currentBom.unit" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
                             {% for u in unit_materials %}
                             <option value="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
                             {% empty %}
@@ -565,19 +740,20 @@
                             <option value="lembar">Lembar (lembar)</option>
                             <option value="kg">Kilogram (kg)</option>
                             <option value="meter">Meter (meter)</option>
+                            <option value="set">Set (set)</option>
                             {% endfor %}
                         </select>
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Item / Part *</label>
-                    <input type="text" name="name" x-model="currentBom.name" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nama Item / Part *</label>
+                    <input type="text" name="name" x-model="currentBom.name" required class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Sub-Assembly Induk</label>
-                    <select name="parent_uuid" x-model="currentBom.parent_uuid" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Sub-Assembly Induk</label>
+                    <select name="parent_uuid" x-model="currentBom.parent_uuid" class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm">
                         <option value="">-- Level Teratas (Bukan Bagian Rakitan Lain) --</option>
                         {% for m in materials %}
                         {% if m.item_type == 'assembly' %}
@@ -587,24 +763,35 @@
                     </select>
                 </div>
 
-                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                    <span class="text-xs font-bold text-slate-700">Estimasi Kebutuhan</span>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-[11px] text-slate-500">Estimasi Qty</label>
-                            <input type="number" step="0.01" name="est_qty" x-model="currentBom.est_qty" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Estimasi Kebutuhan</span>
+                        <div x-show="currentBom.item_type === 'material'" class="text-right">
+                            <span class="text-[11px] text-slate-500">Estimasi Subtotal:</span>
+                            <span class="text-sm font-bold text-indigo-700 font-mono ml-1" 
+                                  x-text="'Rp ' + Math.round((parseFloat(currentBom.est_qty) || 0) * (parseFloat(currentBom.est_unit_cost) || 0)).toLocaleString('id-ID')"></span>
                         </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-[11px] text-slate-500">Est. Harga Satuan (Rp)</label>
-                            <input type="number" step="0.01" name="est_unit_cost" x-model="currentBom.est_unit_cost" class="w-full rounded border border-slate-300 p-1.5 text-sm">
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Estimasi Qty</label>
+                            <input type="number" step="0.01" name="est_qty" x-model="currentBom.est_qty" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold">
+                        </div>
+                        <div x-show="currentBom.item_type === 'material'">
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Est. Harga Satuan (Rp)</label>
+                            <input type="number" step="1" name="est_unit_cost" x-model="currentBom.est_unit_cost" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono font-bold">
                         </div>
                     </div>
                 </div>
 
-                <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" @click="editBomModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded">Update Item</button>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Catatan</label>
+                    <input type="text" name="notes" x-model="currentBom.notes" class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm">
+                </div>
+
+                <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="editBomModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition">Batal</button>
+                    <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition">Update Item</button>
                 </div>
             </form>
         </div>
@@ -874,4 +1061,64 @@
     </div>
 
 </div>
+
+<script>
+function bomAddModalController() {
+    const rawMaterialsData = {{ raw_materials_json|safe }};
+    return {
+        rawMaterials: rawMaterialsData,
+        itemType: 'material',
+        searchRm: '',
+        rmDropdownOpen: false,
+        selectedRm: null,
+        rawMaterialUuid: '',
+        nameInput: '',
+        unitInput: 'pcs',
+        estQty: 1,
+        estCostInput: 0,
+        notesInput: '',
+        parentUuid: '',
+
+        get filteredRawMaterials() {
+            if (!this.searchRm || this.rawMaterialUuid) return this.rawMaterials;
+            const q = this.searchRm.toLowerCase();
+            return this.rawMaterials.filter(rm => 
+                rm.name.toLowerCase().includes(q) || 
+                rm.code.toLowerCase().includes(q) ||
+                (rm.category && rm.category.toLowerCase().includes(q))
+            );
+        },
+
+        selectRawMaterial(rm) {
+            this.selectedRm = rm;
+            this.rawMaterialUuid = rm.uuid;
+            this.searchRm = rm.name;
+            this.nameInput = rm.name;
+            this.unitInput = rm.stock_unit;
+            this.estCostInput = rm.last_purchase_price;
+            this.rmDropdownOpen = false;
+        },
+
+        clearRawMaterial() {
+            this.selectedRm = null;
+            this.rawMaterialUuid = '';
+            this.searchRm = '';
+            this.nameInput = '';
+            this.estCostInput = 0;
+            this.rmDropdownOpen = true;
+        },
+
+        get subtotal() {
+            const q = parseFloat(this.estQty) || 0;
+            const c = parseFloat(this.estCostInput) || 0;
+            return q * c;
+        },
+
+        formatRupiah(val) {
+            const num = parseFloat(val) || 0;
+            return 'Rp ' + Math.round(num).toLocaleString('id-ID');
+        }
+    };
+}
+</script>
 {% endblock %}

@@ -1,9 +1,12 @@
 from .utils import generate_project_code, get_ordered_bom
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
+from django.db import transaction
 from django.db.models import Q
 from django.contrib import messages
 from decimal import Decimal
+from datetime import datetime
+import json
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 
@@ -13,7 +16,8 @@ from .models import (
     Employee, Attendance, EmployeeWorkLog,
     Project, BOMItem, ProjectLabor, ProjectOverhead,
     MaterialMaster, LaborMaster, FinishedGood,
-    ProjectFinishedGood, FinishedGoodStockMutation
+    ProjectFinishedGood, FinishedGoodStockMutation,
+    RawMaterial
 )
 
 
@@ -46,18 +50,94 @@ def project_list(request):
     })
 
 
+@transaction.atomic
 def project_create(request):
     if request.method == "POST":
         code = request.POST.get("code", "").strip() or generate_project_code()
-        name = request.POST.get("name")
+        name = request.POST.get("name", "").strip()
         customer_uuid = request.POST.get("customer_uuid", "").strip()
         customer = Customer.objects.filter(uuid=customer_uuid).first() if customer_uuid else None
-        customer_name = str(customer) if customer else request.POST.get("customer_name", "")
-        contract_value = Decimal(request.POST.get("contract_value") or 0)
-        progress_percentage = int(request.POST.get("progress_percentage") or 0)
+        manual_customer_name = request.POST.get("customer_name", "").strip()
+        customer_name = str(customer) if customer else manual_customer_name
+
+        raw_contract = request.POST.get("contract_value", "0").strip()
+        clean_contract = raw_contract.replace("Rp", "").replace("rp", "").replace(" ", "")
+        if "," in clean_contract and "." in clean_contract:
+            clean_contract = clean_contract.replace(".", "").replace(",", ".")
+        elif "." in clean_contract and "," not in clean_contract:
+            parts = clean_contract.split(".")
+            if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
+                clean_contract = clean_contract.replace(".", "")
+        elif "," in clean_contract:
+            clean_contract = clean_contract.replace(",", ".")
+
+        try:
+            contract_value = Decimal(clean_contract or 0)
+            if contract_value < 0:
+                contract_value = Decimal(0)
+        except Exception:
+            contract_value = Decimal(0)
+
+        try:
+            progress_percentage = int(request.POST.get("progress_percentage") or 0)
+            progress_percentage = max(0, min(100, progress_percentage))
+        except (ValueError, TypeError):
+            progress_percentage = 0
+
         status = request.POST.get("status", "draft")
         start_date = request.POST.get("start_date") or None
         target_date = request.POST.get("target_date") or None
+        notes = request.POST.get("notes", "").strip()
+
+        # Validasi: Nama project wajib diisi
+        if not name:
+            messages.error(request, "Nama project wajib diisi.")
+            customers = Customer.objects.all().order_by("name")
+            customers_json = json.dumps([
+                {
+                    "uuid": str(c.uuid),
+                    "code": c.code,
+                    "name": c.name,
+                    "company_name": c.company_name or "",
+                    "label": str(c),
+                }
+                for c in customers
+            ])
+            return render(request, "hpp/project_form.html", {
+                "status_choices": Project.STATUS_CHOICES,
+                "auto_code": code or generate_project_code(),
+                "customers": customers,
+                "customers_json": customers_json,
+                "form_data": request.POST,
+            })
+
+        # Validasi: Urutan tanggal
+        if start_date and target_date:
+            try:
+                s_d = datetime.strptime(start_date, "%Y-%m-%d").date()
+                t_d = datetime.strptime(target_date, "%Y-%m-%d").date()
+                if t_d < s_d:
+                    messages.error(request, "Target tanggal selesai tidak boleh lebih awal dari tanggal mulai pengerjaan.")
+                    customers = Customer.objects.all().order_by("name")
+                    customers_json = json.dumps([
+                        {
+                            "uuid": str(c.uuid),
+                            "code": c.code,
+                            "name": c.name,
+                            "company_name": c.company_name or "",
+                            "label": str(c),
+                        }
+                        for c in customers
+                    ])
+                    return render(request, "hpp/project_form.html", {
+                        "status_choices": Project.STATUS_CHOICES,
+                        "auto_code": code or generate_project_code(),
+                        "customers": customers,
+                        "customers_json": customers_json,
+                        "form_data": request.POST,
+                    })
+            except ValueError:
+                pass
 
         if Project.objects.filter(code=code).exists():
             code = generate_project_code()
@@ -72,16 +152,29 @@ def project_create(request):
             status=status,
             start_date=start_date,
             target_date=target_date,
+            notes=notes,
         )
         project.release_stock_if_completed()
+        messages.success(request, f"Project '{project.name}' ({project.code}) berhasil dibuat! Silakan lengkapi Bill of Materials (BOM).")
         return redirect("project_detail", uuid=project.uuid)
 
     auto_code = generate_project_code()
     customers = Customer.objects.all().order_by("name")
+    customers_json = json.dumps([
+        {
+            "uuid": str(c.uuid),
+            "code": c.code,
+            "name": c.name,
+            "company_name": c.company_name or "",
+            "label": str(c),
+        }
+        for c in customers
+    ])
     return render(request, "hpp/project_form.html", {
         "status_choices": Project.STATUS_CHOICES,
         "auto_code": auto_code,
         "customers": customers,
+        "customers_json": customers_json,
     })
 
 
@@ -93,8 +186,24 @@ def project_detail(request, uuid):
     finished_goods = project.finished_good_items.all().select_related("finished_good")
     
     master_materials = MaterialMaster.objects.all().order_by("name")
+    raw_materials = RawMaterial.objects.all().order_by("name")
     master_labors = LaborMaster.objects.all().order_by("role_name")
     master_finished_goods = FinishedGood.objects.all().order_by("name")
+    unit_materials = UnitMaster.objects.filter(category="raw_material", is_active=True).order_by("name")
+
+    raw_materials_json = json.dumps([
+        {
+            "uuid": str(rm.uuid),
+            "code": rm.code,
+            "name": rm.name,
+            "category": rm.category or "Umum",
+            "stock_unit": rm.stock_unit,
+            "current_stock": float(rm.current_stock),
+            "last_purchase_price": float(rm.last_purchase_price),
+            "label": f"[{rm.code}] {rm.name} (Stok: {rm.current_stock:g} {rm.stock_unit} | Rp {rm.last_purchase_price:,.0f})",
+        }
+        for rm in raw_materials
+    ])
 
     return render(request, "hpp/project_detail.html", {
         "project": project,
@@ -103,8 +212,11 @@ def project_detail(request, uuid):
         "overheads": overheads,
         "finished_goods": finished_goods,
         "master_materials": master_materials,
+        "raw_materials": raw_materials,
+        "raw_materials_json": raw_materials_json,
         "master_labors": master_labors,
         "master_finished_goods": master_finished_goods,
+        "unit_materials": unit_materials,
         "status_choices": Project.STATUS_CHOICES,
     })
 
@@ -114,16 +226,46 @@ def project_update(request, uuid):
     if request.method == "POST":
         project.code = request.POST.get("code", project.code)
         project.name = request.POST.get("name", project.name)
-        project.customer_name = request.POST.get("customer_name", "")
-        project.contract_value = Decimal(request.POST.get("contract_value") or 0)
-        project.progress_percentage = int(request.POST.get("progress_percentage") or 0)
+        customer_uuid = request.POST.get("customer_uuid", "").strip()
+        if customer_uuid:
+            customer = Customer.objects.filter(uuid=customer_uuid).first()
+            if customer:
+                project.customer = customer
+                project.customer_name = str(customer)
+        elif "customer_name" in request.POST:
+            project.customer_name = request.POST.get("customer_name", "")
+
+        raw_contract = request.POST.get("contract_value", str(project.contract_value)).strip()
+        clean_contract = raw_contract.replace("Rp", "").replace("rp", "").replace(" ", "")
+        if "," in clean_contract and "." in clean_contract:
+            clean_contract = clean_contract.replace(".", "").replace(",", ".")
+        elif "." in clean_contract and "," not in clean_contract:
+            parts = clean_contract.split(".")
+            if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
+                clean_contract = clean_contract.replace(".", "")
+        elif "," in clean_contract:
+            clean_contract = clean_contract.replace(",", ".")
+        try:
+            project.contract_value = Decimal(clean_contract or 0)
+        except Exception:
+            pass
+
+        try:
+            progress = int(request.POST.get("progress_percentage") or project.progress_percentage)
+            project.progress_percentage = max(0, min(100, progress))
+        except (ValueError, TypeError):
+            pass
+
         project.status = request.POST.get("status", project.status)
         project.start_date = request.POST.get("start_date") or None
         project.target_date = request.POST.get("target_date") or None
+        if "notes" in request.POST:
+            project.notes = request.POST.get("notes", "").strip()
         project.save()
         
         # Cek trigger potong stock jika project selesai
         project.release_stock_if_completed()
+        messages.success(request, f"Project '{project.name}' berhasil diperbarui.")
     return redirect("project_detail", uuid=project.uuid)
 
 
@@ -135,45 +277,118 @@ def bom_item_add(request, project_uuid):
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
         item_type = request.POST.get("item_type", "material")
-        unit = request.POST.get("unit", "pcs").strip()
-        est_qty = Decimal(request.POST.get("est_qty") or 0)
-        est_unit_cost = Decimal(request.POST.get("est_unit_cost") or 0)
-        act_qty = Decimal(request.POST.get("act_qty") or 0)
-        act_unit_cost = Decimal(request.POST.get("act_unit_cost") or 0)
-        parent_uuid = request.POST.get("parent_uuid") or None
-        notes = request.POST.get("notes", "")
+        raw_material_uuid = request.POST.get("raw_material_uuid", "").strip()
+        raw_material = RawMaterial.objects.filter(uuid=raw_material_uuid).first() if raw_material_uuid else None
+        if raw_material and not name:
+            name = raw_material.name
 
+        unit = request.POST.get("unit", "").strip()
+        if not unit and raw_material:
+            unit = raw_material.stock_unit
+        if not unit:
+            unit = "pcs"
+
+        raw_est_qty = request.POST.get("est_qty", "1").strip().replace(",", ".")
+        try:
+            est_qty = Decimal(raw_est_qty or 1)
+            if est_qty < 0:
+                est_qty = Decimal(0)
+        except Exception:
+            est_qty = Decimal(1)
+
+        raw_est_cost = request.POST.get("est_unit_cost", "0").strip()
+        clean_cost = raw_est_cost.replace("Rp", "").replace("rp", "").replace(" ", "")
+        if "," in clean_cost and "." in clean_cost:
+            clean_cost = clean_cost.replace(".", "").replace(",", ".")
+        elif "." in clean_cost and "," not in clean_cost:
+            parts = clean_cost.split(".")
+            if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
+                clean_cost = clean_cost.replace(".", "")
+        elif "," in clean_cost:
+            clean_cost = clean_cost.replace(",", ".")
+        try:
+            est_unit_cost = Decimal(clean_cost or 0)
+            if est_unit_cost < 0:
+                est_unit_cost = Decimal(0)
+        except Exception:
+            est_unit_cost = Decimal(0)
+
+        if est_unit_cost == 0 and raw_material:
+            est_unit_cost = raw_material.last_purchase_price
+
+        parent_uuid = request.POST.get("parent_uuid") or None
         parent = BOMItem.objects.filter(uuid=parent_uuid, project=project).first() if parent_uuid else None
+        notes = request.POST.get("notes", "").strip()
+
+        if not name:
+            messages.error(request, "Nama item BOM wajib diisi.")
+            return redirect("project_detail", uuid=project.uuid)
 
         BOMItem.objects.create(
             project=project,
             parent=parent,
+            raw_material=raw_material,
             name=name,
             item_type=item_type,
             unit=unit,
             est_qty=est_qty,
             est_unit_cost=est_unit_cost,
-            act_qty=act_qty,
-            act_unit_cost=act_unit_cost,
             notes=notes,
         )
+        messages.success(request, f"Item BOM '{name}' berhasil ditambahkan.")
     return redirect("project_detail", uuid=project.uuid)
 
 
 def bom_item_update(request, uuid):
     item = get_object_or_404(BOMItem, uuid=uuid)
     if request.method == "POST":
-        item.name = request.POST.get("name", item.name).strip()
-        item.item_type = request.POST.get("item_type", item.item_type)
-        item.unit = request.POST.get("unit", item.unit).strip()
-        item.est_qty = Decimal(request.POST.get("est_qty") or 0)
-        item.est_unit_cost = Decimal(request.POST.get("est_unit_cost") or 0)
-        item.act_qty = Decimal(request.POST.get("act_qty") or 0)
-        item.act_unit_cost = Decimal(request.POST.get("act_unit_cost") or 0)
+        name = request.POST.get("name", item.name).strip()
+        item_type = request.POST.get("item_type", item.item_type)
+        raw_material_uuid = request.POST.get("raw_material_uuid", "").strip()
+        raw_material = RawMaterial.objects.filter(uuid=raw_material_uuid).first() if raw_material_uuid else item.raw_material
+
+        unit = request.POST.get("unit", item.unit).strip()
+
+        raw_est_qty = request.POST.get("est_qty", str(item.est_qty)).strip().replace(",", ".")
+        try:
+            est_qty = Decimal(raw_est_qty or 0)
+            if est_qty < 0:
+                est_qty = Decimal(0)
+        except Exception:
+            est_qty = item.est_qty
+
+        raw_est_cost = request.POST.get("est_unit_cost", str(item.est_unit_cost)).strip()
+        clean_cost = raw_est_cost.replace("Rp", "").replace("rp", "").replace(" ", "")
+        if "," in clean_cost and "." in clean_cost:
+            clean_cost = clean_cost.replace(".", "").replace(",", ".")
+        elif "." in clean_cost and "," not in clean_cost:
+            parts = clean_cost.split(".")
+            if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
+                clean_cost = clean_cost.replace(".", "")
+        elif "," in clean_cost:
+            clean_cost = clean_cost.replace(",", ".")
+        try:
+            est_unit_cost = Decimal(clean_cost or 0)
+            if est_unit_cost < 0:
+                est_unit_cost = Decimal(0)
+        except Exception:
+            est_unit_cost = item.est_unit_cost
+
         parent_uuid = request.POST.get("parent_uuid") or None
-        item.parent = BOMItem.objects.filter(uuid=parent_uuid, project=item.project).exclude(id=item.id).first() if parent_uuid else None
-        item.notes = request.POST.get("notes", item.notes)
+        parent = BOMItem.objects.filter(uuid=parent_uuid, project=item.project).exclude(id=item.id).first() if parent_uuid else None
+        notes = request.POST.get("notes", item.notes).strip()
+
+        if name:
+            item.name = name
+        item.item_type = item_type
+        item.raw_material = raw_material
+        item.unit = unit
+        item.est_qty = est_qty
+        item.est_unit_cost = est_unit_cost
+        item.parent = parent
+        item.notes = notes
         item.save()
+        messages.success(request, f"Item BOM '{item.name}' berhasil diperbarui.")
     return redirect("project_detail", uuid=item.project.uuid)
 
 

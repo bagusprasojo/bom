@@ -1,5 +1,6 @@
-﻿from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
+from django.http import JsonResponse
 from django.db.models import Q
 from .models import Customer
 
@@ -21,6 +22,11 @@ def customer_list(request):
 
 def customer_create(request):
     if request.method == "POST":
+        is_ajax = (
+            request.headers.get("x-requested-with") == "XMLHttpRequest"
+            or request.POST.get("is_ajax") == "1"
+            or request.GET.get("format") == "json"
+        )
         code = request.POST.get("code", "").strip()
         name = request.POST.get("name", "").strip()
         company_name = request.POST.get("company_name", "").strip()
@@ -29,16 +35,24 @@ def customer_create(request):
         address = request.POST.get("address", "").strip()
         notes = request.POST.get("notes", "").strip()
 
+        if not name:
+            if is_ajax:
+                return JsonResponse({"status": "error", "message": "Nama customer wajib diisi."}, status=400)
+            messages.error(request, "Nama customer wajib diisi.")
+            return redirect("customer_list")
+
         if not code:
             last_cust = Customer.objects.order_by("-id").first()
             next_id = (last_cust.id + 1) if last_cust else 1
             code = f"CUST-{next_id:03d}"
 
         if Customer.objects.filter(code=code).exists():
+            if is_ajax:
+                return JsonResponse({"status": "error", "message": f"Kode customer {code} sudah digunakan."}, status=400)
             messages.error(request, f"Kode customer {code} sudah digunakan.")
             return redirect("customer_list")
 
-        Customer.objects.create(
+        customer = Customer.objects.create(
             code=code,
             name=name,
             company_name=company_name,
@@ -47,6 +61,20 @@ def customer_create(request):
             address=address,
             notes=notes,
         )
+
+        if is_ajax:
+            return JsonResponse({
+                "status": "success",
+                "message": f"Customer '{name}' berhasil didaftarkan.",
+                "customer": {
+                    "uuid": str(customer.uuid),
+                    "code": customer.code,
+                    "name": customer.name,
+                    "company_name": customer.company_name,
+                    "label": str(customer),
+                }
+            })
+
         messages.success(request, f"Customer '{name}' berhasil ditambahkan.")
     return redirect("customer_list")
 

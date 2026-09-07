@@ -1,72 +1,635 @@
-﻿<!-- hpp/templates/hpp/project_form.html -->
+<!-- hpp/templates/hpp/project_form.html -->
 {% extends "hpp/base.html" %}
+{% load custom_filters %}
 
-{% block title %}Buat Project Baru - HPP & BOM{% endblock %}
+{% block title %}Buat Project Baru - HPP & BOM Manager{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-    <h1 class="text-xl font-bold text-slate-900 mb-4">Buat Project Baru</h1>
-    
-    <form method="POST" class="space-y-4">
-        {% csrf_token %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div class="max-w-4xl mx-auto space-y-6" x-data="projectFormController()">
+
+    <!-- Toast Notification (Inline Quick Add / Alert) -->
+    <div x-show="showToast" 
+         x-transition:enter="transition ease-out duration-300 transform"
+         x-transition:enter-start="opacity-0 -translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200 transform"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 -translate-y-4"
+         class="fixed top-6 right-6 z-50 bg-emerald-700 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-emerald-500"
+         style="display: none;">
+        <svg class="w-5 h-5 text-emerald-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span class="text-sm font-semibold" x-text="toastMessage"></span>
+    </div>
+
+    <!-- Breadcrumb & Top Header -->
+    <div>
+        <div class="flex items-center gap-2 text-xs text-slate-500 mb-2">
+            <a href="{% url 'project_list' %}" class="hover:text-indigo-600 transition">Project & HPP</a>
+            <span>&rsaquo;</span>
+            <a href="{% url 'project_list' %}" class="hover:text-indigo-600 transition">Daftar Project</a>
+            <span>&rsaquo;</span>
+            <span class="text-slate-800 font-semibold">Buat Project Baru</span>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kode Project (Otomatis)</label>
-                <input type="text" name="code" value="{{ auto_code }}" readonly class="w-full rounded-md border border-slate-200 bg-slate-100 font-mono font-bold text-indigo-700 px-3 py-2 text-sm focus:outline-none cursor-not-allowed">
+                <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+                    <span class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </span>
+                    Buat Project Manufaktur Baru
+                </h1>
+                <p class="text-sm text-slate-500 mt-0.5">Daftarkan profil kontrak proyek sebelum menyusun Bill of Materials (BOM) & estimasi HPP.</p>
             </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Customer / Klien</label>
-                <select name="customer_uuid" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
-                    <option value="">-- Pilih Customer --</option>
-                    {% for c in customers %}
-                    <option value="{{ c.uuid }}">{{ c.name }}{% if c.company_name %} ({{ c.company_name }}){% endif %}</option>
-                    {% endfor %}
-                </select>
-                <div class="text-[11px] text-slate-400 mt-1">
-                    Customer belum ada? <a href="{% url 'customer_list' %}" target="_blank" class="text-indigo-600 font-bold hover:underline">+ Master Customer</a>
+            <a href="{% url 'project_list' %}" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Kembali ke Daftar
+            </a>
+        </div>
+    </div>
+
+    <!-- 3-Step Workflow Banner -->
+    <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <!-- Step 1: Profil & Nilai Project (Active) -->
+            <div class="flex items-center gap-3 p-3 rounded-lg bg-indigo-50/80 border border-indigo-200">
+                <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">1</div>
+                <div>
+                    <div class="text-xs font-bold text-indigo-950 uppercase tracking-wide">Langkah 1 (Aktif)</div>
+                    <div class="text-sm font-semibold text-indigo-900">Profil & Nilai Kontrak</div>
+                </div>
+            </div>
+            <!-- Step 2: Susun BOM & Biaya -->
+            <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 opacity-60">
+                <div class="w-8 h-8 rounded-lg bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm flex-shrink-0">2</div>
+                <div>
+                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Langkah 2</div>
+                    <div class="text-sm font-semibold text-slate-700">Penyusunan BOM & Biaya</div>
+                </div>
+            </div>
+            <!-- Step 3: Realisasi & Margin HPP -->
+            <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 opacity-60">
+                <div class="w-8 h-8 rounded-lg bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm flex-shrink-0">3</div>
+                <div>
+                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">Langkah 3</div>
+                    <div class="text-sm font-semibold text-slate-700">Realisasi & Margin Laba</div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <div>
-            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Project *</label>
-            <input type="text" name="name" required placeholder="Pembuatan 50 Set Meja Kantor" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+    <!-- Error / Success Messages from Django -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3.5 rounded-xl text-sm font-medium flex items-center gap-2.5 {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            {% if message.tags == 'error' %}
+            <svg class="w-5 h-5 text-rose-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {% else %}
+            <svg class="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            {% endif %}
+            <span>{{ message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main Form Card -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+            <h2 class="text-base font-bold text-slate-800">Formulir Pendaftaran Project</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Isi detail spesifikasi dasar untuk memulai perhitungan anggaran biaya manufaktur.</p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nilai Kontrak / Jual (Rp)</label>
-                <input type="number" step="0.01" name="contract_value" value="0" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status Awal</label>
-                <select name="status" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-                    {% for code, label in status_choices %}
-                    <option value="{{ code }}">{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
+        <form method="POST" class="p-6 sm:p-8 space-y-6">
+            {% csrf_token %}
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Progress (%)</label>
-                <input type="number" min="0" max="100" name="progress_percentage" value="0" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tgl Mulai</label>
-                <input type="date" name="start_date" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Target Selesai</label>
-                <input type="date" name="target_date" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            </div>
-        </div>
+            <!-- Row 1: Kode Project & Customer Autocomplete -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Kode Project -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Kode Project</label>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            Auto-Generated
+                        </span>
+                    </div>
+                    <div class="relative">
+                        <input type="text" name="code" value="{{ auto_code }}" readonly 
+                               class="w-full rounded-lg border border-slate-200 bg-slate-100/90 font-mono font-bold text-indigo-700 px-3.5 py-2.5 text-sm focus:outline-none cursor-not-allowed select-all shadow-inner">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1">Nomor referensi unik proyek yang di-generate sistem secara sekuensial.</p>
+                </div>
 
-        <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <a href="{% url 'project_list' %}" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-200">Batal</a>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700">Simpan & Lanjut ke BOM</button>
+                <!-- Customer / Klien (Autocomplete Combobox + Quick Add) -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Customer / Klien</label>
+                        <button type="button" @click="openQuickAddCustomer()" class="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            + Customer Baru
+                        </button>
+                    </div>
+
+                    <!-- Toggle Mode: Master Customer vs Walk-in Manual -->
+                    <div x-show="!isManualCustomer" class="relative" @click.outside="customerDropdownOpen = false">
+                        <input type="hidden" name="customer_uuid" :value="customerUuid">
+
+                        <div class="relative">
+                            <input type="text" 
+                                   x-model="searchCustomer"
+                                   @focus="customerDropdownOpen = true"
+                                   @input="customerUuid = ''; customerDropdownOpen = true"
+                                   placeholder="Ketik untuk mencari customer..."
+                                   class="w-full rounded-lg border border-slate-300 pl-3.5 pr-16 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition placeholder-slate-400">
+
+                            <!-- Clear & Toggle Icons -->
+                            <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+                                <button type="button" 
+                                        x-show="customerUuid || searchCustomer" 
+                                        @click="clearCustomer()" 
+                                        class="p-1 text-slate-400 hover:text-slate-600 transition"
+                                        title="Hapus pilihan">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                                <button type="button" 
+                                        @click="customerDropdownOpen = !customerDropdownOpen" 
+                                        class="p-1 text-slate-400 hover:text-slate-600 transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Dropdown Options Menu -->
+                        <div x-show="customerDropdownOpen" 
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             class="absolute z-30 mt-1.5 w-full bg-white rounded-xl shadow-xl border border-slate-200 max-h-56 overflow-y-auto divide-y divide-slate-100"
+                             style="display: none;">
+                            
+                            <!-- Option List -->
+                            <template x-for="c in filteredCustomers" :key="c.uuid">
+                                <div @click="selectCustomer(c)" 
+                                     class="p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between transition group"
+                                     :class="customerUuid === c.uuid ? 'bg-indigo-50 font-semibold' : ''">
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-800 group-hover:text-indigo-900" x-text="c.name"></div>
+                                        <div class="text-xs text-slate-500" x-show="c.company_name" x-text="c.company_name"></div>
+                                    </div>
+                                    <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-800" x-text="c.code"></span>
+                                </div>
+                            </template>
+
+                            <!-- Empty Search Result -->
+                            <div x-show="filteredCustomers.length === 0" class="p-4 text-center text-xs text-slate-500">
+                                <p>Tidak ada customer yang cocok.</p>
+                                <button type="button" @click="openQuickAddCustomer()" class="mt-2 text-indigo-600 font-bold hover:underline">
+                                    + Daftarkan Customer Ini Sekarang
+                                </button>
+                            </div>
+
+                            <!-- Bottom Action in Dropdown -->
+                            <div class="p-2 bg-slate-50 text-center">
+                                <button type="button" @click="openQuickAddCustomer()" class="w-full py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition">
+                                    + Tambah Customer Baru (Cepat)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manual Customer Name Input (Fallback) -->
+                    <div x-show="isManualCustomer" style="display: none;">
+                        <input type="text" name="customer_name" x-model="manualCustomerName" placeholder="Contoh: Bpk. Joko Santoso (Klien Non-Tetap)" 
+                               class="w-full rounded-lg border border-amber-300 bg-amber-50/30 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                    </div>
+
+                    <!-- Switcher links -->
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 mt-1">
+                        <span x-show="customerUuid" class="text-emerald-600 font-semibold flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Customer terverifikasi
+                        </span>
+                        <span x-show="!customerUuid && !isManualCustomer">Pilih dari master atau tambah baru</span>
+                        <button type="button" @click="isManualCustomer = !isManualCustomer; if(isManualCustomer) { customerUuid = ''; searchCustomer = ''; }" 
+                                class="text-slate-500 hover:text-indigo-600 underline font-medium">
+                            <span x-text="isManualCustomer ? '← Pilih dari Master Customer' : 'Klien walk-in tanpa master?'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Nama Project -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Nama / Judul Project <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" name="name" required value="{{ form_data.name|default:'' }}" 
+                       placeholder="Contoh: Pembuatan 50 Set Meja Kantor Kayu Solid & Besi Hollow" 
+                       class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm placeholder-slate-400 font-medium">
+                <p class="text-[11px] text-slate-400 mt-1">Nama deskriptif untuk mempermudah pencarian dan identifikasi laporan HPP.</p>
+            </div>
+
+            <!-- Row 3: Nilai Kontrak (dengan Live Rupiah Preview) & Status Awal -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Nilai Kontrak -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Nilai Kontrak / Penjualan (Rp)</label>
+                        <span x-show="contractValue > 0" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 font-mono" x-text="formatRupiah(contractValue)"></span>
+                    </div>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 font-bold text-sm">Rp</span>
+                        <input type="number" step="1" name="contract_value" x-model="contractValue" 
+                               class="w-full rounded-lg border border-slate-300 pl-10 pr-3.5 py-2.5 text-sm font-mono font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm">
+                    </div>
+                    <!-- Live Terbilang Text -->
+                    <div class="text-[11px] text-slate-500 mt-1 flex items-center gap-1 font-medium">
+                        <span>Terbilang:</span>
+                        <span class="text-indigo-600 font-semibold italic" x-text="terbilangText(contractValue)"></span>
+                    </div>
+                </div>
+
+                <!-- Status Awal -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Status Awal</label>
+                    <div class="relative">
+                        <select name="status" class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm appearance-none bg-white">
+                            {% for code, label in status_choices %}
+                            <option value="{{ code }}" {% if form_data.status == code or forloop.first %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1">Biasanya project baru dimulai dengan status <em>Draft / Perencanaan</em>.</p>
+                </div>
+            </div>
+
+            <!-- Row 4: Progress (%) & Timeline Pengerjaan -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 border-t border-slate-100">
+                <!-- Progress Percentage -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Progress Pengerjaan</label>
+                        <span class="font-mono font-bold text-xs px-2 py-0.5 rounded text-white"
+                              :class="progress === 100 ? 'bg-emerald-600' : (progress > 0 ? 'bg-indigo-600' : 'bg-slate-400')"
+                              x-text="progress + '%'"></span>
+                    </div>
+                    
+                    <!-- Range Slider + Number Input -->
+                    <div class="space-y-2">
+                        <input type="range" min="0" max="100" step="5" x-model.number="progress" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        <input type="hidden" name="progress_percentage" :value="progress">
+
+                        <!-- Progress Bar Visual Indicator -->
+                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                            <div class="h-full transition-all duration-300"
+                                 :class="progress === 100 ? 'bg-emerald-500' : (progress > 50 ? 'bg-indigo-600' : 'bg-amber-500')"
+                                 :style="'width: ' + progress + '%'"></div>
+                        </div>
+
+                        <!-- Quick Presets -->
+                        <div class="flex items-center justify-between gap-1 pt-1">
+                            <button type="button" @click="progress = 0" class="px-2 py-0.5 rounded text-[10px] font-bold transition" :class="progress === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">0%</button>
+                            <button type="button" @click="progress = 25" class="px-2 py-0.5 rounded text-[10px] font-bold transition" :class="progress === 25 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">25%</button>
+                            <button type="button" @click="progress = 50" class="px-2 py-0.5 rounded text-[10px] font-bold transition" :class="progress === 50 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">50%</button>
+                            <button type="button" @click="progress = 75" class="px-2 py-0.5 rounded text-[10px] font-bold transition" :class="progress === 75 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">75%</button>
+                            <button type="button" @click="progress = 100" class="px-2 py-0.5 rounded text-[10px] font-bold transition" :class="progress === 100 ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">100%</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tgl Mulai -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Tgl Mulai Pengerjaan</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="setToday()" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">Hari Ini</button>
+                            <button type="button" @click="setTomorrow()" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">Besok</button>
+                        </div>
+                    </div>
+                    <input type="date" name="start_date" x-model="startDate" @change="adjustTargetMin()"
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm">
+                    <p class="text-[11px] text-slate-400 mt-1">Tanggal dimulainya proses produksi/fabrikasi.</p>
+                </div>
+
+                <!-- Target Selesai -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Target Selesai</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="addWeeks(2)" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">+2 Mgg</button>
+                            <button type="button" @click="addMonths(1)" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">+1 Bln</button>
+                            <button type="button" @click="addMonths(3)" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">+3 Bln</button>
+                        </div>
+                    </div>
+                    <input type="date" name="target_date" x-model="targetDate" :min="startDate" 
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm">
+                    <p class="text-[11px] text-slate-400 mt-1">Tenggat waktu serah terima produk ke customer.</p>
+                </div>
+            </div>
+
+            <!-- Row 5: Catatan / Spesifikasi Proyek -->
+            <div class="pt-2 border-t border-slate-100">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Catatan / Spesifikasi Pekerjaan <span class="text-slate-400 font-normal normal-case">(Opsional)</span>
+                </label>
+                <textarea name="notes" rows="3" placeholder="Tuliskan spesifikasi teknis khusus, ketentuan pengiriman, toleransi ukuran, atau catatan pesanan lainnya..." 
+                          class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-sm placeholder-slate-400 font-normal">{{ form_data.notes|default:'' }}</textarea>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-100">
+                <a href="{% url 'project_list' %}" class="w-full sm:w-auto px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition text-center">
+                    Batal & Kembali
+                </a>
+
+                <div class="w-full sm:w-auto flex flex-col sm:flex-row items-center gap-3">
+                    <span class="text-[11px] text-slate-400 hidden lg:inline">
+                        Langkah berikutnya: Penyusunan BOM & penetapan biaya standar
+                    </span>
+                    <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition">
+                        <span>Simpan & Lanjut ke BOM</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Quick Add Customer Modal (Inline AJAX) -->
+    <div x-show="quickAddModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+         style="display: none;">
+        
+        <div @click.outside="quickAddModal = false"
+             class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Tambah Customer Cepat</h3>
+                        <p class="text-xs text-slate-500">Customer baru akan langsung tersimpan & terpilih di form project.</p>
+                    </div>
+                </div>
+                <button type="button" @click="quickAddModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Error alert inside modal -->
+            <div x-show="quickError" class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-800" x-text="quickError"></div>
+
+            <div class="space-y-3.5">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nama Customer / Kontak <span class="text-rose-500">*</span></label>
+                    <input type="text" x-model="quickName" placeholder="Contoh: Bpk. Bambang Pamungkas" 
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nama Perusahaan / Instansi</label>
+                    <input type="text" x-model="quickCompany" placeholder="Contoh: PT Surya Kencana Abadi" 
+                           class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">No. Telepon / WhatsApp</label>
+                        <input type="text" x-model="quickPhone" placeholder="08123456789" 
+                               class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Alamat Singkat</label>
+                        <input type="text" x-model="quickAddress" placeholder="Kawasan Industri Cikarang" 
+                               class="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button type="button" @click="quickAddModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                    Batal
+                </button>
+                <button type="button" @click="submitQuickCustomer()" :disabled="quickSaving" 
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow transition disabled:opacity-50">
+                    <svg x-show="quickSaving" class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    <span x-text="quickSaving ? 'Menyimpan...' : 'Simpan Customer'"></span>
+                </button>
+            </div>
         </div>
-    </form>
+    </div>
 </div>
+
+<script>
+function projectFormController() {
+    const rawCustomers = {{ customers_json|safe }};
+    const initialCustomerUuid = "{{ form_data.customer_uuid|default:'' }}";
+    let initialSelected = null;
+    if (initialCustomerUuid) {
+        initialSelected = rawCustomers.find(c => c.uuid === initialCustomerUuid) || null;
+    }
+
+    return {
+        customers: rawCustomers,
+        searchCustomer: initialSelected ? initialSelected.label : '',
+        customerUuid: initialSelected ? initialSelected.uuid : '',
+        customerDropdownOpen: false,
+        isManualCustomer: false,
+        manualCustomerName: "{{ form_data.customer_name|default:'' }}",
+
+        contractValue: "{{ form_data.contract_value|default:'0' }}",
+        progress: parseInt("{{ form_data.progress_percentage|default:'0' }}") || 0,
+        startDate: "{{ form_data.start_date|default:'' }}",
+        targetDate: "{{ form_data.target_date|default:'' }}",
+
+        // Quick Add Modal State
+        quickAddModal: false,
+        quickName: '',
+        quickCompany: '',
+        quickPhone: '',
+        quickAddress: '',
+        quickSaving: false,
+        quickError: '',
+
+        // Toast Notification
+        toastMessage: '',
+        showToast: false,
+
+        get filteredCustomers() {
+            if (!this.searchCustomer || this.customerUuid) {
+                return this.customers;
+            }
+            const q = this.searchCustomer.toLowerCase();
+            return this.customers.filter(c => 
+                c.name.toLowerCase().includes(q) || 
+                (c.company_name && c.company_name.toLowerCase().includes(q)) ||
+                c.code.toLowerCase().includes(q)
+            );
+        },
+
+        selectCustomer(cust) {
+            this.customerUuid = cust.uuid;
+            this.searchCustomer = cust.label;
+            this.customerDropdownOpen = false;
+            this.isManualCustomer = false;
+        },
+
+        clearCustomer() {
+            this.customerUuid = '';
+            this.searchCustomer = '';
+            this.customerDropdownOpen = true;
+        },
+
+        formatRupiah(amount) {
+            const num = parseFloat(String(amount).replace(/[^0-9.-]+/g, '')) || 0;
+            return 'Rp ' + Math.round(num).toLocaleString('id-ID');
+        },
+
+        terbilangText(amount) {
+            const num = parseFloat(String(amount).replace(/[^0-9.-]+/g, '')) || 0;
+            if (num <= 0) return 'Nol Rupiah';
+            if (num >= 1000000000000) return (num / 1000000000000).toFixed(2).replace(/\.00$/, '') + ' Triliun Rupiah';
+            if (num >= 1000000000) return (num / 1000000000).toFixed(2).replace(/\.00$/, '') + ' Miliar Rupiah';
+            if (num >= 1000000) return (num / 1000000).toFixed(2).replace(/\.00$/, '') + ' Juta Rupiah';
+            if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + ' Ribu Rupiah';
+            return num.toLocaleString('id-ID') + ' Rupiah';
+        },
+
+        setToday() {
+            const d = new Date();
+            this.startDate = d.toISOString().split('T')[0];
+            this.adjustTargetMin();
+        },
+
+        setTomorrow() {
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            this.startDate = d.toISOString().split('T')[0];
+            this.adjustTargetMin();
+        },
+
+        addWeeks(w) {
+            const base = this.startDate ? new Date(this.startDate) : new Date();
+            base.setDate(base.getDate() + (w * 7));
+            this.targetDate = base.toISOString().split('T')[0];
+        },
+
+        addMonths(m) {
+            const base = this.startDate ? new Date(this.startDate) : new Date();
+            base.setMonth(base.getMonth() + m);
+            this.targetDate = base.toISOString().split('T')[0];
+        },
+
+        adjustTargetMin() {
+            if (this.startDate && this.targetDate && this.targetDate < this.startDate) {
+                this.targetDate = this.startDate;
+            }
+        },
+
+        openQuickAddCustomer() {
+            this.customerDropdownOpen = false;
+            this.quickName = this.searchCustomer && !this.customerUuid ? this.searchCustomer : '';
+            this.quickCompany = '';
+            this.quickPhone = '';
+            this.quickAddress = '';
+            this.quickError = '';
+            this.quickAddModal = true;
+        },
+
+        async submitQuickCustomer() {
+            if (!this.quickName.trim()) {
+                this.quickError = 'Nama customer wajib diisi!';
+                return;
+            }
+            this.quickSaving = true;
+            this.quickError = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                formData.append('is_ajax', '1');
+                formData.append('name', this.quickName.trim());
+                formData.append('company_name', this.quickCompany.trim());
+                formData.append('phone', this.quickPhone.trim());
+                formData.append('address', this.quickAddress.trim());
+
+                const response = await fetch("{% url 'customer_create' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (response.ok && data.status === 'success') {
+                    this.customers.unshift(data.customer);
+                    this.selectCustomer(data.customer);
+                    this.quickAddModal = false;
+                    this.triggerToast(data.message || 'Customer berhasil ditambahkan!');
+                } else {
+                    this.quickError = data.message || 'Gagal menambahkan customer.';
+                }
+            } catch (err) {
+                this.quickError = 'Terjadi kesalahan jaringan atau server.';
+            } finally {
+                this.quickSaving = false;
+            }
+        },
+
+        triggerToast(msg) {
+            this.toastMessage = msg;
+            this.showToast = true;
+            setTimeout(() => { this.showToast = false; }, 3500);
+        }
+    };
+}
+</script>
 {% endblock %}
