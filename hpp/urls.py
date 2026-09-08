@@ -114,6 +114,7 @@ urlpatterns = [
     
     # Absensi & Karyawan
     path("attendance/", views.attendance_list, name="attendance_list"),
+    path("attendance/export/", views.attendance_export_excel, name="attendance_export_excel"),
     path("attendance/new/", views.attendance_create, name="attendance_create"),
     path("attendance/<uuid:uuid>/update/", views.attendance_update, name="attendance_update"),
     path("attendance/<uuid:uuid>/delete/", views.attendance_delete, name="attendance_delete"),

@@ -2455,3 +2455,299 @@ def finished_good_form_view(request):
         return redirect("stock_report")
 
     return render(request, "hpp/finished_good_form.html")
+
+
+def attendance_export_excel(request):
+    """
+    Export Rekap Absensi Karyawan per Periode (2 Sheets: Rekapitulasi & Detail) ke Excel (.xlsx)
+    """
+    start_date_str = request.GET.get("start_date", "").strip()
+    end_date_str = request.GET.get("end_date", "").strip()
+    emp_uuid = request.GET.get("employee", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+    absence_type_filter = request.GET.get("absence_type", "").strip()
+
+    today = date.today()
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            end_date = today
+    else:
+        end_date = today
+
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            start_date = date(end_date.year, end_date.month, 1)
+    else:
+        start_date = date(end_date.year, end_date.month, 1)
+
+    attendances_qs = Attendance.objects.filter(
+        date__gte=start_date,
+        date__lte=end_date
+    ).select_related("employee", "absence_type").order_by("date", "employee__name")
+
+    if emp_uuid:
+        attendances_qs = attendances_qs.filter(employee__uuid=emp_uuid)
+    if status_filter:
+        if status_filter == "HADIR":
+            attendances_qs = attendances_qs.filter(status="HADIR")
+        elif status_filter == "TIDAK_HADIR":
+            attendances_qs = attendances_qs.exclude(status="HADIR")
+        else:
+            attendances_qs = attendances_qs.filter(status=status_filter)
+    if absence_type_filter:
+        attendances_qs = attendances_qs.filter(absence_type__uuid=absence_type_filter)
+
+    attendances = list(attendances_qs)
+
+    if emp_uuid:
+        employees = list(Employee.objects.filter(uuid=emp_uuid))
+    else:
+        employees = list(Employee.objects.filter(is_active=True).order_by("name"))
+
+    wb = openpyxl.Workbook()
+
+    # Styling definitions
+    title_font = Font(name="Calibri", size=14, bold=True, color="0F172A")
+    subtitle_font = Font(name="Calibri", size=10, italic=True, color="64748B")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    summary_header_fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
+    regular_font = Font(name="Calibri", size=10)
+    bold_font = Font(name="Calibri", size=10, bold=True)
+    total_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    thin_side = Side(border_style="thin", color="CBD5E1")
+    thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    # ==========================================
+    # SHEET 1: REKAPITULASI KEHADIRAN & PAYROLL
+    # ==========================================
+    ws_summary = wb.active
+    ws_summary.title = "Rekapitulasi Kehadiran"
+
+    ws_summary["A1"] = "REKAPITULASI ABSENSI & UPAH KARYAWAN"
+    ws_summary["A1"].font = title_font
+    ws_summary["A2"] = f"Periode: {start_date.strftime('%d %b %Y')} s/d {end_date.strftime('%d %b %Y')} | Dicetak: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    ws_summary["A2"].font = subtitle_font
+
+    summary_headers = [
+        "No", "NIK", "Nama Karyawan", "Jabatan",
+        "Hadir", "Cuti", "Izin", "Sakit", "Dinas Luar", "Alpha",
+        "Total Hari", "Lembur (Jam)", "Upah Harian (Rp)", "Total Akumulasi Upah (Rp)"
+    ]
+
+    for col_idx, h in enumerate(summary_headers, start=1):
+        cell = ws_summary.cell(row=4, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = summary_header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+    ws_summary.row_dimensions[4].height = 28
+
+    tot_hadir = 0
+    tot_cuti = 0
+    tot_ijin = 0
+    tot_sakit = 0
+    tot_dinas = 0
+    tot_alpha = 0
+    tot_days = 0
+    tot_ot = Decimal(0)
+    tot_wages = Decimal(0)
+
+    for row_idx, emp in enumerate(employees, start=5):
+        emp_records = [a for a in attendances if a.employee_id == emp.id]
+
+        c_hadir = sum(1 for a in emp_records if a.status == "HADIR")
+        c_cuti = sum(1 for a in emp_records if a.absence_type and a.absence_type.category == "LEAVE")
+        c_ijin = sum(1 for a in emp_records if a.status == "IJIN" or (a.absence_type and a.absence_type.category == "PERMIT"))
+        c_sakit = sum(1 for a in emp_records if a.status == "SAKIT" or (a.absence_type and a.absence_type.category == "SICK"))
+        c_dinas = sum(1 for a in emp_records if a.absence_type and a.absence_type.category == "OFFICIAL_TRAVEL")
+        c_alpha = sum(1 for a in emp_records if a.status == "ALPHA" or (a.absence_type and a.absence_type.category == "ABSENT"))
+        c_total_days = len(emp_records)
+        c_ot = sum(a.overtime_hours for a in emp_records)
+        c_wage = sum(a.wage for a in emp_records)
+
+        tot_hadir += c_hadir
+        tot_cuti += c_cuti
+        tot_ijin += c_ijin
+        tot_sakit += c_sakit
+        tot_dinas += c_dinas
+        tot_alpha += c_alpha
+        tot_days += c_total_days
+        tot_ot += c_ot
+        tot_wages += c_wage
+
+        row_vals = [
+            row_idx - 4,
+            emp.nik,
+            emp.name,
+            emp.position,
+            c_hadir,
+            c_cuti,
+            c_ijin,
+            c_sakit,
+            c_dinas,
+            c_alpha,
+            c_total_days,
+            float(c_ot),
+            float(emp.daily_rate),
+            float(c_wage),
+        ]
+
+        for col_idx, val in enumerate(row_vals, start=1):
+            cell = ws_summary.cell(row=row_idx, column=col_idx, value=val)
+            cell.font = regular_font
+            cell.border = thin_border
+            if col_idx in [1, 2]:
+                cell.alignment = Alignment(horizontal="center")
+            elif col_idx in [5, 6, 7, 8, 9, 10, 11]:
+                cell.alignment = Alignment(horizontal="center")
+            elif col_idx == 12:
+                cell.alignment = Alignment(horizontal="right")
+                cell.number_format = "#,##0.0"
+            elif col_idx in [13, 14]:
+                cell.alignment = Alignment(horizontal="right")
+                cell.number_format = "#,##0"
+
+    # Total Row for Sheet 1
+    total_row_idx = len(employees) + 5
+    ws_summary.cell(row=total_row_idx, column=1, value="")
+    cell_lbl = ws_summary.cell(row=total_row_idx, column=2, value="TOTAL KESELURUHAN")
+    cell_lbl.font = bold_font
+    ws_summary.merge_cells(start_row=total_row_idx, start_column=2, end_row=total_row_idx, end_column=4)
+
+    summary_totals = [
+        (5, tot_hadir, "center", "#,##0"),
+        (6, tot_cuti, "center", "#,##0"),
+        (7, tot_ijin, "center", "#,##0"),
+        (8, tot_sakit, "center", "#,##0"),
+        (9, tot_dinas, "center", "#,##0"),
+        (10, tot_alpha, "center", "#,##0"),
+        (11, tot_days, "center", "#,##0"),
+        (12, float(tot_ot), "right", "#,##0.0"),
+        (13, "", "right", ""),
+        (14, float(tot_wages), "right", "#,##0"),
+    ]
+
+    for col_idx, val, align, num_fmt in summary_totals:
+        c = ws_summary.cell(row=total_row_idx, column=col_idx, value=val if val != "" else None)
+        c.font = bold_font
+        c.alignment = Alignment(horizontal=align)
+        if num_fmt:
+            c.number_format = num_fmt
+
+    for c_idx in range(1, 15):
+        cell = ws_summary.cell(row=total_row_idx, column=c_idx)
+        cell.fill = total_fill
+        cell.border = thin_border
+
+    # Adjust Column Widths Sheet 1
+    for col in ws_summary.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            val_str = str(cell.value or "")
+            if cell.row in [1, 2]:
+                continue
+            if len(val_str) > max_len:
+                max_len = len(val_str)
+        ws_summary.column_dimensions[col_letter].width = max(max_len + 3, 10)
+
+    # ==========================================
+    # SHEET 2: DETAIL LOG PRESENSI HARIAN
+    # ==========================================
+    ws_detail = wb.create_sheet(title="Log Harian Detail")
+
+    ws_detail["A1"] = "DETAIL CATATAN PRESENSI HARIAN KARYAWAN"
+    ws_detail["A1"].font = title_font
+    ws_detail["A2"] = f"Periode: {start_date.strftime('%d %b %Y')} s/d {end_date.strftime('%d %b %Y')}"
+    ws_detail["A2"].font = subtitle_font
+
+    detail_headers = [
+        "No", "Tanggal", "NIK", "Nama Karyawan", "Jabatan",
+        "Status", "Jenis Tidak Masuk", "Ketentuan Upah (% Gaji)",
+        "Jam Masuk", "Jam Keluar", "Jam Kerja (Jam)", "Lembur (Jam)",
+        "Upah Harian (Rp)", "Catatan / Keterangan"
+    ]
+
+    for col_idx, h in enumerate(detail_headers, start=1):
+        cell = ws_detail.cell(row=4, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+    ws_detail.row_dimensions[4].height = 28
+
+    for d_idx, a in enumerate(attendances, start=5):
+        status_lbl = a.display_status_label
+        if a.absence_type:
+            abs_type_name = f"[{a.absence_type.code}] {a.absence_type.name}"
+            wage_rule = f"{a.absence_type.wage_percentage:.0f}% Upah ({'Paid' if a.absence_type.is_paid else 'Unpaid'})"
+        elif a.status == "HADIR":
+            abs_type_name = "-"
+            wage_rule = "100% Upah Penuh (Hadir)"
+        else:
+            abs_type_name = a.get_status_display()
+            wage_rule = "Tanpa Upah (0%)"
+
+        calc_work_hours = 0.0
+        if a.check_in and a.check_out:
+            t1 = datetime.combine(date.today(), a.check_in)
+            t2 = datetime.combine(date.today(), a.check_out)
+            calc_work_hours = round(max((t2 - t1).total_seconds() / 3600, 0), 2)
+        elif a.status == "HADIR":
+            calc_work_hours = 8.0
+
+        d_row = [
+            d_idx - 4,
+            a.date.strftime("%Y-%m-%d"),
+            a.employee.nik,
+            a.employee.name,
+            a.employee.position,
+            "Hadir" if a.status == "HADIR" else "Tidak Masuk",
+            abs_type_name,
+            wage_rule,
+            a.check_in.strftime("%H:%M") if a.check_in else "-",
+            a.check_out.strftime("%H:%M") if a.check_out else "-",
+            calc_work_hours,
+            float(a.overtime_hours),
+            float(a.wage),
+            a.notes or "-",
+        ]
+
+        for col_idx, val in enumerate(d_row, start=1):
+            cell = ws_detail.cell(row=d_idx, column=col_idx, value=val)
+            cell.font = regular_font
+            cell.border = thin_border
+            if col_idx in [1, 2, 3, 6, 9, 10]:
+                cell.alignment = Alignment(horizontal="center")
+            elif col_idx in [11, 12]:
+                cell.alignment = Alignment(horizontal="right")
+                cell.number_format = "#,##0.0"
+            elif col_idx == 13:
+                cell.alignment = Alignment(horizontal="right")
+                cell.number_format = "#,##0"
+
+    # Detail Sheet Column Widths
+    for col in ws_detail.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            val_str = str(cell.value or "")
+            if cell.row in [1, 2]:
+                continue
+            if len(val_str) > max_len:
+                max_len = len(val_str)
+        ws_detail.column_dimensions[col_letter].width = max(max_len + 3, 10)
+
+    # Stream response
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    filename = f"Rekap_Absensi_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
