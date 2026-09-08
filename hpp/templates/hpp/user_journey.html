@@ -5,12 +5,20 @@
 {% block content %}
 <div class="space-y-6" x-data="{ 
     activeTab: 'lifecycle',
-    copied: false,
+    copiedMd: false,
+    copiedAdv: false,
     copyMarkdown() {
         const text = document.getElementById('rawMarkdownContent').innerText;
         navigator.clipboard.writeText(text).then(() => {
-            this.copied = true;
-            setTimeout(() => this.copied = false, 2500);
+            this.copiedMd = true;
+            setTimeout(() => this.copiedMd = false, 2500);
+        });
+    },
+    copyAdvantages() {
+        const text = document.getElementById('rawAdvantagesContent').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            this.copiedAdv = true;
+            setTimeout(() => this.copiedAdv = false, 2500);
         });
     }
 }">
@@ -27,11 +35,11 @@
                     <span>Peta Alur Operasional & Dokumentasi Sistem</span>
                 </div>
                 <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                    Panduan Alur Pengguna (User Journey)
+                    Panduan Alur Pengguna & Keunggulan Aplikasi
                 </h1>
                 <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
                     Pelajari siklus hidup menyeluruh (*end-to-end*) sistem manufaktur: mulai dari estimasi HPP di tahap Draft, 
-                    eksekusi lapangan & realisasi stok, hingga closing proyek dan pengelolaan modul-modul pendukung.
+                    eksekusi lapangan & realisasi stok, closing proyek, hingga 10 keunggulan strategis dibanding spreadsheet konvensional.
                 </p>
             </div>
 
@@ -40,10 +48,9 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     <span>Buat Proyek Baru</span>
                 </a>
-                <button type="button" @click="copyMarkdown()" class="px-4 py-2.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold rounded-xl transition flex items-center gap-2">
-                    <svg x-show="!copied" class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
-                    <svg x-show="copied" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                    <span x-text="copied ? 'Tersalin ke Clipboard!' : 'Salin File USER_JOURNEY.md'"></span>
+                <button type="button" @click="activeTab = 'advantages'" class="px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/30 text-xs font-bold rounded-xl transition flex items-center gap-2">
+                    <span>⭐</span>
+                    <span>10 Keunggulan Sistem</span>
                 </button>
             </div>
         </div>
@@ -62,11 +69,17 @@
                 <span>🧩</span>
                 <span>Modul Pendukung & Matriks Peran</span>
             </button>
+            <button @click="activeTab = 'advantages'" 
+                    :class="activeTab === 'advantages' ? 'bg-indigo-600 text-white font-bold shadow-md' : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'"
+                    class="px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap">
+                <span>⭐</span>
+                <span>Keunggulan Aplikasi (10 Nilai Tambah)</span>
+            </button>
             <button @click="activeTab = 'markdown'" 
                     :class="activeTab === 'markdown' ? 'bg-indigo-600 text-white font-bold shadow-md' : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'"
                     class="px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap">
                 <span>📄</span>
-                <span>Dokumen Lengkap (.MD)</span>
+                <span>Dokumen USER_JOURNEY.md</span>
             </button>
         </div>
     </div>
@@ -225,7 +238,132 @@
         </div>
     </div>
 
-    <!-- TAB 3: DOKUMEN MARKDOWN ASLI (USER_JOURNEY.MD) -->
+    <!-- TAB 3: KEUNGGULAN APLIKASI (10 NILAI TAMBAH) -->
+    <div x-show="activeTab === 'advantages'" class="space-y-6" style="display: none;">
+        
+        <!-- Grid 10 Keunggulan Utama -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">1</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Integrasi Standard vs Actual Costing</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Menyandingkan Estimasi HPP dan Realisasi HPP secara berdampingan. Deviasi biaya (*variance*) dan selisih gross margin dihitung real-time per proyek.
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">2</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Hierarchical BOM & Multi-Level Sub-Assembly</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Mendukung pohon perakitan berjenjang (*tree hierarchy*) tanpa batas kedalaman untuk memodelkan struktur produk manufaktur secara presisi.
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">3</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Salin BOM Cepat dengan Faktor Pengali (Multiplier)</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Duplikasi instan seluruh resep material, tenaga kerja, dan overhead dari proyek sebelumnya dengan pengali kuantitas otomatis tanpa merusak hierarki pohon.
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">4</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Log Kinerja Lapangan Terhubung ke Realisasi</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Aktivitas harian pekerja lapangan langsung dikonversi menjadi pencatatan biaya riil proyek via tombol *Posting Realisasi* (mendukung planned & unplanned work).
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">5</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Otomasi Pemotongan & Penambahan Stok Gudang</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Realisasi bahan otomatis memotong saldo gudang. Closing proyek otomatis merilis barang jadi ke persediaan via mutasi stok resmi.
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">6</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Multi-Satuan Konversi Bahan Baku</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Mendukung pembelian dalam satuan besar (Dus, Rim, Kaleng) dan pemakaian di lantai pabrik dalam satuan kecil (Pcs, Lembar, Kg) dengan rasio pengali otomatis.
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">7</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Penguncian Audit (Closing) & Cetak BAP Resmi</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Data HPP dikunci permanen saat proyek selesai untuk kepatuhan pembukuan. Dilengkapi Berita Acara Penyelesaian (BAP) siap cetak dan tanda tangan sah.
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">8</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Reopen Proyek Aman dengan Rollback Stok Otomatis</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Jika ada revisi audit pasca-closing, proyek dapat dibuka kembali dengan catatan alasan audit, serta otomatis membatalkan penambahan stok barang jadi agar saldo fisik tidak selisih.
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">9</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Safeguard Keamanan Transaksi Finansial</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Proyek yang sudah memiliki realisasi/mutasi dilindungi mutlak dari penghapusan. Karyawan yang memiliki catatan kerja harian dilindungi dari penghapusan kasual.
+                </p>
+            </div>
+
+            <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">10</span>
+                    <h3 class="font-bold text-slate-900 text-sm">Modal Riwayat Proyek Customer & Kartu Stok Otomatis</h3>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Sekali klik pada Master Customer menampilkan seluruh portofolio pesanan dan total nilai kontrak. Kartu stok otomatis memelihara buku jurnal transaksi pergerakan barang.
+                </p>
+            </div>
+        </div>
+
+        <!-- Viewer File KEUNGGULAN_APLIKASI.md -->
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 bg-amber-50 text-amber-700 rounded-lg font-mono font-bold text-xs">MD</span>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">File Sumber: KEUNGGULAN_APLIKASI.md</h3>
+                        <p class="text-[11px] text-slate-500">Tersedia langsung di root direktori project untuk dibaca atau disertakan ke proposal bisnis.</p>
+                    </div>
+                </div>
+                <button type="button" @click="copyAdvantages()" class="px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold rounded-lg transition flex items-center gap-1.5">
+                    <span x-text="copiedAdv ? '✓ Berhasil Disalin' : '📋 Salin Isi File'"></span>
+                </button>
+            </div>
+
+            <pre id="rawAdvantagesContent" class="bg-slate-900 text-slate-200 p-5 rounded-xl font-mono text-xs overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed border border-slate-800 whitespace-pre-wrap">{{ advantages_md }}</pre>
+        </div>
+    </div>
+
+    <!-- TAB 4: DOKUMEN MARKDOWN ASLI (USER_JOURNEY.MD) -->
     <div x-show="activeTab === 'markdown'" class="space-y-4" style="display: none;">
         <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-3">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -237,7 +375,7 @@
                     </div>
                 </div>
                 <button type="button" @click="copyMarkdown()" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg transition flex items-center gap-1.5">
-                    <span x-text="copied ? '✓ Berhasil Disalin' : '📋 Salin Isi File'"></span>
+                    <span x-text="copiedMd ? '✓ Berhasil Disalin' : '📋 Salin Isi File'"></span>
                 </button>
             </div>
 

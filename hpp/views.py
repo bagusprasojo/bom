@@ -2979,6 +2979,15 @@ def user_journey(request):
         except Exception:
             md_content = "File panduan tidak dapat dimuat."
 
+    advantages_file_path = os.path.join(settings.BASE_DIR, "KEUNGGULAN_APLIKASI.md")
+    advantages_md = ""
+    if os.path.exists(advantages_file_path):
+        try:
+            with open(advantages_file_path, "r", encoding="utf-8") as f:
+                advantages_md = f.read()
+        except Exception:
+            advantages_md = "File keunggulan aplikasi tidak dapat dimuat."
+
     journey_steps = [
         {
             "step": 1,
@@ -3159,6 +3168,7 @@ def user_journey(request):
 
     return render(request, "hpp/user_journey.html", {
         "md_content": md_content,
+        "advantages_md": advantages_md,
         "journey_steps": journey_steps,
         "supporting_modules": supporting_modules,
         "role_matrix": role_matrix,
