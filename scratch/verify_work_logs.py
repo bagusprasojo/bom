@@ -9,7 +9,7 @@ django.setup()
 from decimal import Decimal
 from datetime import date, timedelta
 from django.test import Client
-from hpp.models import Employee, Project, AbsenceType, Attendance, EmployeeWorkLog, LaborRealization
+from hpp.models import Employee, Project, AbsenceType, Attendance, EmployeeWorkLog, LaborRealization, ProjectLabor
 
 def run_tests():
     print("==================================================")
@@ -94,21 +94,34 @@ def run_tests():
     suggested_rate = log.suggested_hourly_rate
     assert suggested_rate == round(emp.daily_rate / Decimal(8), 2)
 
+    # Create a budgeted ProjectLabor item on the project
+    labor_item = ProjectLabor.objects.create(
+        project=project,
+        role_name="Tukang Kayu Jati",
+        est_quantity=Decimal("50"),
+        est_rate=Decimal("25000"),
+    )
+
     post_realize_res = client.post(f"/work-logs/{log.uuid}/post-realization/", {
-        "rate": str(suggested_rate),
-        "role_name": f"{emp.position} ({emp.name})",
-        "is_additional": "on",
-        "notes": "Posting otomatis pengujian log kinerja",
+        "labor_item_uuid": str(labor_item.uuid),
+        "rate": "25000",
+        "role_name": f"{labor_item.role_name} ({emp.name})",
+        "is_additional": "0",
+        "notes": "Posting otomatis pengujian log kinerja dengan item anggaran",
     }, follow=True)
     assert post_realize_res.status_code == 200
 
     log.refresh_from_db()
     assert log.labor_realization is not None, "labor_realization was not linked to work log"
     realization = log.labor_realization
-    expected_cost = Decimal("8") * suggested_rate
+    expected_cost = Decimal("8") * Decimal("25000")
     assert realization.total_cost == expected_cost, f"Expected cost {expected_cost}, got {realization.total_cost}"
     assert realization.project == project
-    print(f"[PASS] 4. Post to HPP Realization succeeded: Rp {realization.total_cost} linked to project {project.code}")
+    assert realization.project_labor == labor_item, f"project_labor was not linked! Got {realization.project_labor}"
+    assert realization.is_additional is False, "Expected is_additional to be False when linked to budget item"
+    assert labor_item.total_realized_quantity == Decimal("8"), f"Expected 8 realized hours, got {labor_item.total_realized_quantity}"
+    assert labor_item.total_realized_cost == expected_cost, f"Expected {expected_cost} realized cost, got {labor_item.total_realized_cost}"
+    print(f"[PASS] 4. Post to HPP Realization linked to ProjectLabor '{labor_item.role_name}': Rp {realization.total_cost} (Budget vs Act verified!)")
 
     # 5. Test Audit Lock: Completed project prevents posting or unposting
     old_status = project.status

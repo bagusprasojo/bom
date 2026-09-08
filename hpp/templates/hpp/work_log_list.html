@@ -216,17 +216,17 @@
                             </div>
                             {% else %}
                                 {% if log.project.status != 'completed' %}
-                                <button @click="postRealizationModal = true; currentPostLog = {
+                                <button @click="openPostModal({
                                     uuid: '{{ log.uuid }}',
                                     emp_name: '{{ log.employee.name|escapejs }}',
                                     position: '{{ log.employee.position|escapejs }}',
+                                    project_uuid: '{{ log.project.uuid|default:'' }}',
                                     proj_code: '{{ log.project.code|escapejs }}',
                                     proj_name: '{{ log.project.name|escapejs }}',
                                     hours: '{{ log.hours_spent }}',
                                     rate: '{{ log.suggested_hourly_rate }}',
-                                    notes: 'Auto-post dari Log Kinerja: {{ log.task_description|truncatechars:60|escapejs }}',
-                                    is_additional: true
-                                }" class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-xs font-semibold hover:bg-indigo-100 transition shadow-sm">
+                                    notes: 'Auto-post dari Log Kinerja: {{ log.task_description|truncatechars:60|escapejs }}'
+                                })" class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-xs font-semibold hover:bg-indigo-100 transition shadow-sm">
                                     <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                                     + Post HPP
                                 </button>
@@ -598,8 +598,27 @@
                 </div>
 
                 <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-semibold text-slate-600 uppercase">Pasangkan ke Item Anggaran (Opsional)</label>
+                        <span class="text-[10px] text-slate-400 font-normal">Sesuai Rencana Proyek</span>
+                    </div>
+                    <select name="labor_item_uuid" 
+                            x-model="currentPostLog.labor_item_uuid"
+                            @change="onLaborItemChange()"
+                            class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500">
+                        <option value="">-- Di Luar Anggaran Pokok (Pekerjaan Tambahan) --</option>
+                        <template x-for="item in currentProjectLaborItems" :key="item.uuid">
+                            <option :value="item.uuid" x-text="item.label"></option>
+                        </template>
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-1" x-show="currentProjectLaborItems.length === 0">
+                        * Proyek ini belum memiliki rincian item anggaran tenaga kerja. Realisasi akan otomatis dicatat sebagai tenaga kerja tambahan.
+                    </p>
+                </div>
+
+                <div>
                     <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Peran / Pekerjaan di Proyek</label>
-                    <input type="text" name="role_name" :value="currentPostLog.position + ' (' + currentPostLog.emp_name + ')'" class="w-full rounded border border-slate-300 p-2 text-sm">
+                    <input type="text" name="role_name" x-model="currentPostLog.role_name" class="w-full rounded border border-slate-300 p-2 text-sm">
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
@@ -655,12 +674,53 @@
                 uuid: '',
                 emp_name: '',
                 position: '',
+                project_uuid: '',
                 proj_code: '',
                 proj_name: '',
                 hours: 8,
                 rate: 0,
+                default_rate: 0,
+                labor_item_uuid: '',
+                role_name: '',
                 notes: '',
                 is_additional: true
+            },
+            currentProjectLaborItems: [],
+            openPostModal(data) {
+                this.currentPostLog = {
+                    uuid: data.uuid,
+                    emp_name: data.emp_name,
+                    position: data.position,
+                    project_uuid: data.project_uuid,
+                    proj_code: data.proj_code,
+                    proj_name: data.proj_name,
+                    hours: data.hours,
+                    rate: data.rate,
+                    default_rate: data.rate,
+                    labor_item_uuid: '',
+                    role_name: data.position + ' (' + data.emp_name + ')',
+                    notes: data.notes,
+                    is_additional: true
+                };
+                const proj = this.allProjects.find(p => p.uuid === data.project_uuid);
+                this.currentProjectLaborItems = (proj && proj.labor_items) ? proj.labor_items : [];
+                this.postRealizationModal = true;
+            },
+            onLaborItemChange() {
+                if (this.currentPostLog.labor_item_uuid) {
+                    const item = this.currentProjectLaborItems.find(i => i.uuid === this.currentPostLog.labor_item_uuid);
+                    if (item) {
+                        this.currentPostLog.role_name = item.role_name + ' (' + this.currentPostLog.emp_name + ')';
+                        if (item.est_rate > 0) {
+                            this.currentPostLog.rate = item.est_rate;
+                        }
+                        this.currentPostLog.is_additional = false;
+                    }
+                } else {
+                    this.currentPostLog.role_name = this.currentPostLog.position + ' (' + this.currentPostLog.emp_name + ')';
+                    this.currentPostLog.rate = this.currentPostLog.default_rate;
+                    this.currentPostLog.is_additional = true;
+                }
             },
             get filteredAddProjects() {
                 const q = (this.addProjectSearch || '').toLowerCase().trim();

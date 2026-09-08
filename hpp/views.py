@@ -2015,9 +2015,19 @@ def work_log_list(request):
         )
 
     employees = Employee.objects.filter(is_active=True).order_by("name")
-    projects = Project.objects.all().order_by("-created_at")
+    projects = Project.objects.prefetch_related("labor_items").order_by("-created_at")
     projects_data = []
     for p in projects:
+        labor_items_data = []
+        for li in p.labor_items.all():
+            labor_items_data.append({
+                "uuid": str(li.uuid),
+                "role_name": li.role_name,
+                "unit": li.unit,
+                "est_quantity": float(li.est_quantity),
+                "est_rate": float(li.est_rate),
+                "label": f"{li.role_name} (Budget: {li.est_quantity:g} {li.unit} @ Rp {li.est_rate:,.0f})",
+            })
         projects_data.append({
             "uuid": str(p.uuid),
             "code": p.code,
@@ -2027,6 +2037,7 @@ def work_log_list(request):
             "customer": p.customer_name or (p.customer.name if p.customer else ""),
             "label": f"[{p.code}] {p.name}",
             "is_completed": p.status == "completed",
+            "labor_items": labor_items_data,
         })
     projects_json = json.dumps(projects_data)
 
@@ -2185,12 +2196,29 @@ def work_log_post_to_realization(request, uuid):
         else:
             rate = log.suggested_hourly_rate
 
-        role_name = request.POST.get("role_name", "").strip() or f"{log.employee.position} ({log.employee.name})"
-        is_additional = request.POST.get("is_additional") == "on" or request.POST.get("is_additional") == "true"
+        labor_item_uuid = request.POST.get("labor_item_uuid", "").strip()
+        project_labor = None
+        if labor_item_uuid:
+            project_labor = ProjectLabor.objects.filter(uuid=labor_item_uuid, project=log.project).first()
+
+        role_name = request.POST.get("role_name", "").strip()
+        if not role_name:
+            if project_labor:
+                role_name = f"{project_labor.role_name} ({log.employee.name})"
+            else:
+                role_name = f"{log.employee.position} ({log.employee.name})"
+
+        is_additional_param = request.POST.get("is_additional")
+        if is_additional_param is not None:
+            is_additional = is_additional_param in ["on", "true", "1"]
+        else:
+            is_additional = project_labor is None
+
         notes = request.POST.get("notes", "").strip() or f"Auto-post dari Log Kinerja: {log.task_description[:80]}"
 
         realization = LaborRealization.objects.create(
             project=log.project,
+            project_labor=project_labor,
             date=log.date,
             role_name=role_name,
             unit="jam",
