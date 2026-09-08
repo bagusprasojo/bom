@@ -16,6 +16,8 @@ urlpatterns = [
     path("projects/<uuid:uuid>/close/", views.project_close, name="project_close"),
     path("projects/<uuid:uuid>/reopen/", views.project_reopen, name="project_reopen"),
     path("projects/<uuid:uuid>/bap/", views.project_closing_bap, name="project_closing_bap"),
+    path("projects/<uuid:uuid>/delete/", views.project_delete, name="project_delete"),
+    path("projects/<uuid:uuid>/copy-bom/", views.project_copy_bom, name="project_copy_bom"),
     
     # Master Satuan (Unit Master)
     path("units/", views_unit.unit_list, name="unit_list"),

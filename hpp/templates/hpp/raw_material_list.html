@@ -167,7 +167,10 @@
                         <a href="{% url 'raw_material_stock_card' m.uuid %}" class="inline-block text-[11px] bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-semibold">
                             Kartu Stok
                         </a>
-                        <a href="{% url 'raw_material_delete' m.uuid %}" onclick="return confirm('Hapus bahan baku {{ m.name }}?');" class="text-[11px] text-rose-600 hover:text-rose-900 font-semibold px-1">Hapus</a>
+                        <form method="POST" action="{% url 'raw_material_delete' m.uuid %}" class="inline" onsubmit="return confirm('Hapus bahan baku {{ m.name|escapejs }}?');">
+                            {% csrf_token %}
+                            <button type="submit" class="text-[11px] text-rose-600 hover:text-rose-900 font-semibold px-1">Hapus</button>
+                        </form>
                     </td>
                 </tr>
                 {% empty %}

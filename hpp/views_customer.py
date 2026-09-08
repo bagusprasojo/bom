@@ -6,7 +6,7 @@ from .models import Customer
 
 def customer_list(request):
     query = request.GET.get("q", "").strip()
-    customers = Customer.objects.all().order_by("name")
+    customers = Customer.objects.prefetch_related("projects").all().order_by("name")
     if query:
         customers = customers.filter(
             Q(name__icontains=query) |
@@ -94,10 +94,13 @@ def customer_update(request, uuid):
 
 def customer_delete(request, uuid):
     customer = get_object_or_404(Customer, uuid=uuid)
-    if customer.projects.exists():
-        messages.error(request, f"Customer '{customer.name}' tidak dapat dihapus karena masih digunakan di {customer.projects.count()} project.")
+    if request.method == "POST":
+        if customer.projects.exists():
+            messages.error(request, f"Customer '{customer.name}' tidak dapat dihapus karena masih digunakan di {customer.projects.count()} project.")
+        else:
+            name = customer.name
+            customer.delete()
+            messages.success(request, f"Customer '{name}' berhasil dihapus.")
     else:
-        name = customer.name
-        customer.delete()
-        messages.success(request, f"Customer '{name}' berhasil dihapus.")
+        messages.warning(request, "Penghapusan customer harus dilakukan melalui tombol yang tersedia.")
     return redirect("customer_list")

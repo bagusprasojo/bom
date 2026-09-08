@@ -276,7 +276,8 @@ class Project(models.Model):
             self.labor_realizations.exists() or
             self.finished_good_realizations.exists() or
             self.overhead_realizations.exists() or
-            self.stock_mutations.exists()
+            self.stock_mutations.exists() or
+            self.material_mutations.exists()
         )
 
     def release_stock_if_completed(self, fg=None, qty=0, notes=""):

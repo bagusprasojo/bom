@@ -391,12 +391,15 @@ def raw_material_update(request, uuid):
 
 def raw_material_delete(request, uuid):
     rm = get_object_or_404(RawMaterial, uuid=uuid)
-    if rm.mutations.exists():
-        messages.error(request, f"Bahan baku '{rm.name}' tidak dapat dihapus karena sudah memiliki riwayat mutasi.")
+    if request.method == "POST":
+        if rm.mutations.exists():
+            messages.error(request, f"Bahan baku '{rm.name}' tidak dapat dihapus karena sudah memiliki riwayat mutasi.")
+        else:
+            name = rm.name
+            rm.delete()
+            messages.success(request, f"Bahan baku '{name}' berhasil dihapus.")
     else:
-        name = rm.name
-        rm.delete()
-        messages.success(request, f"Bahan baku '{name}' berhasil dihapus.")
+        messages.warning(request, "Penghapusan bahan baku harus dilakukan melalui tombol yang tersedia.")
     return redirect("raw_material_list")
 
 def raw_material_conversion_add(request, material_uuid):

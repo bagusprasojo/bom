@@ -258,6 +258,22 @@ def project_detail(request, uuid):
         for fg in master_finished_goods
     ])
 
+    other_projects = Project.objects.exclude(id=project.id).order_by("-created_at")
+    other_projects_json = json.dumps([
+        {
+            "uuid": str(p.uuid),
+            "code": p.code,
+            "name": p.name,
+            "customer": str(p.customer) if p.customer else (p.customer_name or "-"),
+            "bom_count": p.bom_items.count(),
+            "labor_count": p.labor_items.count(),
+            "overhead_count": p.overhead_items.count(),
+            "fg_count": p.finished_good_items.count(),
+            "label": f"[{p.code}] {p.name} ({p.bom_items.count()} BOM, {p.labor_items.count()} Labor)",
+        }
+        for p in other_projects
+    ])
+
     return render(request, "hpp/project_detail.html", {
         "project": project,
         "materials": materials,
@@ -276,6 +292,8 @@ def project_detail(request, uuid):
         "unit_fgs": unit_fgs,
         "unit_overheads": unit_overheads,
         "status_choices": Project.STATUS_CHOICES,
+        "other_projects": other_projects,
+        "other_projects_json": other_projects_json,
     })
 
 
@@ -459,6 +477,185 @@ def project_closing_bap(request, uuid):
         "prod_mutations": prod_mutations,
         "now": timezone.now(),
     })
+
+
+@transaction.atomic
+def project_delete(request, uuid):
+    project = get_object_or_404(Project, uuid=uuid)
+    if request.method == "POST":
+        if project.status != "draft":
+            messages.error(
+                request, 
+                f"Proyek '{project.name}' ({project.code}) tidak dapat dihapus karena berstatus '{project.get_status_display()}'. Hanya proyek berstatus Draft yang dapat dihapus."
+            )
+            return redirect("project_detail", uuid=project.uuid)
+        
+        if project.has_realizations or project.material_mutations.exists() or project.stock_mutations.exists():
+            messages.error(
+                request, 
+                f"Proyek '{project.name}' ({project.code}) tidak dapat dihapus karena sudah memiliki transaksi realisasi atau mutasi stok."
+            )
+            return redirect("project_detail", uuid=project.uuid)
+        
+        proj_code = project.code
+        proj_name = project.name
+        project.delete()
+        messages.success(request, f"Proyek Draft '{proj_code} - {proj_name}' berhasil dihapus.")
+        return redirect("project_list")
+    else:
+        messages.warning(request, "Penghapusan proyek harus dilakukan melalui tombol yang tersedia.")
+        return redirect("project_detail", uuid=project.uuid)
+
+
+@transaction.atomic
+def project_copy_bom(request, uuid):
+    target_project = get_object_or_404(Project, uuid=uuid)
+    if request.method == "POST":
+        if target_project.status == "completed":
+            messages.error(request, f"Proyek '{target_project.code}' sudah selesai dan terkunci. Harap buka kembali proyek terlebih dahulu.")
+            return redirect("project_detail", uuid=target_project.uuid)
+
+        source_uuid = request.POST.get("source_project_uuid", "").strip()
+        if not source_uuid:
+            messages.error(request, "Pilih proyek sumber terlebih dahulu!")
+            return redirect("project_detail", uuid=target_project.uuid)
+
+        source_project = get_object_or_404(Project, uuid=source_uuid)
+        if source_project.id == target_project.id:
+            messages.error(request, "Proyek sumber tidak boleh sama dengan proyek target saat ini.")
+            return redirect("project_detail", uuid=target_project.uuid)
+
+        copy_bom = request.POST.get("copy_bom") in ["on", "true", "1"]
+        copy_labor = request.POST.get("copy_labor") in ["on", "true", "1"]
+        copy_overhead = request.POST.get("copy_overhead") in ["on", "true", "1"]
+        copy_fg = request.POST.get("copy_fg") in ["on", "true", "1"]
+
+        try:
+            multiplier = Decimal(request.POST.get("multiplier", "1").strip() or 1)
+            if multiplier <= Decimal(0):
+                multiplier = Decimal(1)
+        except Exception:
+            multiplier = Decimal(1)
+
+        counts = {"bom": 0, "labor": 0, "overhead": 0, "fg": 0}
+
+        # 1. Kloning BOM Items dengan mempertahankan struktur parent-child
+        if copy_bom:
+            source_boms = list(source_project.bom_items.all().order_by("id"))
+            id_map = {}
+
+            # Pass 1: Clone root items (parent is None)
+            for item in [b for b in source_boms if b.parent_id is None]:
+                new_item = BOMItem.objects.create(
+                    project=target_project,
+                    parent=None,
+                    item_type=item.item_type,
+                    material_master=item.material_master,
+                    raw_material=item.raw_material,
+                    name=item.name,
+                    unit=item.unit,
+                    est_qty=item.est_qty * multiplier,
+                    est_unit_cost=item.est_unit_cost,
+                    notes=item.notes or ""
+                )
+                id_map[item.id] = new_item
+                counts["bom"] += 1
+
+            # Pass 2: Clone children iteratively until all are mapped
+            remaining = [b for b in source_boms if b.parent_id is not None]
+            while remaining:
+                progress = False
+                for item in list(remaining):
+                    if item.parent_id in id_map:
+                        new_parent = id_map[item.parent_id]
+                        new_item = BOMItem.objects.create(
+                            project=target_project,
+                            parent=new_parent,
+                            item_type=item.item_type,
+                            material_master=item.material_master,
+                            raw_material=item.raw_material,
+                            name=item.name,
+                            unit=item.unit,
+                            est_qty=item.est_qty * multiplier,
+                            est_unit_cost=item.est_unit_cost,
+                            notes=item.notes or ""
+                        )
+                        id_map[item.id] = new_item
+                        remaining.remove(item)
+                        counts["bom"] += 1
+                        progress = True
+                if not progress:
+                    # Broken hierarchy in source, copy remainder as root
+                    for item in remaining:
+                        new_item = BOMItem.objects.create(
+                            project=target_project,
+                            parent=None,
+                            item_type=item.item_type,
+                            material_master=item.material_master,
+                            raw_material=item.raw_material,
+                            name=item.name,
+                            unit=item.unit,
+                            est_qty=item.est_qty * multiplier,
+                            est_unit_cost=item.est_unit_cost,
+                            notes=item.notes or ""
+                        )
+                        counts["bom"] += 1
+                    break
+
+        # 2. Kloning Tenaga Kerja (Labor Items)
+        if copy_labor:
+            for labor in source_project.labor_items.all():
+                ProjectLabor.objects.create(
+                    project=target_project,
+                    labor_master=labor.labor_master,
+                    role_name=labor.role_name,
+                    unit=labor.unit,
+                    est_quantity=labor.est_quantity * multiplier,
+                    est_rate=labor.est_rate,
+                    notes=labor.notes or ""
+                )
+                counts["labor"] += 1
+
+        # 3. Kloning Overhead
+        if copy_overhead:
+            for ovh in source_project.overhead_items.all():
+                ProjectOverhead.objects.create(
+                    project=target_project,
+                    name=ovh.name,
+                    est_cost=ovh.est_cost * multiplier,
+                    notes=ovh.notes or ""
+                )
+                counts["overhead"] += 1
+
+        # 4. Kloning Project Finished Goods
+        if copy_fg:
+            for pfg in source_project.finished_good_items.all():
+                ProjectFinishedGood.objects.create(
+                    project=target_project,
+                    finished_good=pfg.finished_good,
+                    est_qty=pfg.est_qty * multiplier,
+                    est_unit_cost=pfg.est_unit_cost,
+                    notes=pfg.notes or ""
+                )
+                counts["fg"] += 1
+
+        total_cloned = sum(counts.values())
+        if total_cloned > 0:
+            details = []
+            if counts["bom"]: details.append(f"{counts['bom']} item BOM")
+            if counts["labor"]: details.append(f"{counts['labor']} item Tenaga Kerja")
+            if counts["overhead"]: details.append(f"{counts['overhead']} item Overhead")
+            if counts["fg"]: details.append(f"{counts['fg']} Barang Jadi")
+            messages.success(
+                request,
+                f"Berhasil menyalin data dari [{source_project.code}] {source_project.name}: {', '.join(details)} (Faktor pengali: {multiplier:g}x)."
+            )
+        else:
+            messages.warning(request, "Tidak ada item yang dipilih untuk disalin.")
+
+        return redirect("project_detail", uuid=target_project.uuid)
+
+    return redirect("project_detail", uuid=target_project.uuid)
 
 
 # =========================================================================
@@ -1952,9 +2149,13 @@ def employee_delete(request, uuid):
     if request.method == "POST":
         if emp.attendances.exists():
             messages.error(request, f"Karyawan {emp.name} tidak dapat dihapus karena memiliki riwayat absensi. Silakan nonaktifkan statusnya.")
+        elif emp.work_logs.exists():
+            messages.error(request, f"Karyawan {emp.name} tidak dapat dihapus karena memiliki riwayat {emp.work_logs.count()} log kegiatan kerja. Silakan nonaktifkan statusnya.")
         else:
             emp.delete()
             messages.success(request, f"Karyawan {emp.name} berhasil dihapus.")
+    else:
+        messages.warning(request, "Penghapusan karyawan harus dilakukan melalui tombol yang tersedia.")
     return redirect("employee_list")
 
 
@@ -2060,6 +2261,8 @@ def work_log_list(request):
     for l in logs:
         l.attendance = attendance_map.get((l.employee_id, l.date))
 
+    output_units = UnitMaster.objects.filter(is_active=True).order_by("category", "name")
+
     return render(request, "hpp/work_log_list.html", {
         "logs": logs,
         "employees": employees,
@@ -2073,6 +2276,7 @@ def work_log_list(request):
         "status_choices": EmployeeWorkLog.STATUS_CHOICES,
         "rating_choices": EmployeeWorkLog.RATING_CHOICES,
         "standard_categories": STANDARD_ACTIVITY_CATEGORIES,
+        "output_units": output_units,
         "total_logs": total_logs,
         "total_hours": total_hours,
         "completed_count": completed_count,

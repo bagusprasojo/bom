@@ -20,7 +20,8 @@
     editFgModal: false,
     currentProjectFg: {},
     closeProjectModal: false,
-    reopenProjectModal: false
+    reopenProjectModal: false,
+    copyBomModal: false
 }">
     <!-- Alert Message jika ada -->
     {% if messages %}
@@ -73,6 +74,15 @@
             {% endif %}
             {% if project.status != 'completed' %}
             <button @click="editProjectModal = true" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition">Edit Status / Info</button>
+            {% endif %}
+            {% if project.status == 'draft' and not project.has_realizations %}
+            <form method="POST" action="{% url 'project_delete' project.uuid %}" class="inline" onsubmit="return confirm('Hapus proyek draft {{ project.code }} - {{ project.name|escapejs }}? Tindakan ini akan menghapus seluruh data anggaran draft dan tidak dapat dibatalkan.');">
+                {% csrf_token %}
+                <button type="submit" class="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-md transition flex items-center gap-1 shadow-sm">
+                    <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    <span>Hapus Draft</span>
+                </button>
+            </form>
             {% endif %}
             <a href="{% url 'export_project_excel' project.uuid %}" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md transition shadow">Export Excel</a>
             <a href="{% url 'print_project_pdf' project.uuid %}" target="_blank" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md transition shadow">Print / PDF</a>
@@ -177,7 +187,13 @@
         <div class="flex justify-between items-center">
             <h2 class="text-lg font-bold text-slate-800">Daftar Bahan & Sub-Assembly (BOM)</h2>
             {% if project.status != 'completed' %}
-            <button @click="addBomModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Item BOM</button>
+            <div class="flex items-center gap-2">
+                <button type="button" @click="copyBomModal = true" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md border border-slate-300 shadow-sm flex items-center gap-1.5 transition">
+                    <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>
+                    <span>Salin BOM dari Proyek Lain</span>
+                </button>
+                <button @click="addBomModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Item BOM</button>
+            </div>
             {% else %}
             <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200">🔒 Terkunci (Proyek Selesai)</span>
             {% endif %}
@@ -1764,6 +1780,163 @@
         </div>
     </div>
 
+    <!-- MODAL: Salin Struktur BOM & Anggaran dari Proyek Lain -->
+    <div x-show="copyBomModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="copyBomModal = false" 
+             x-data="copyBomModalController()"
+             class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 bg-indigo-50 text-indigo-700 rounded-lg">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>
+                    </span>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Salin BOM & Anggaran dari Proyek Lain</h3>
+                        <p class="text-xs text-slate-500">Duplikasi resep produk, tenaga kerja, dan overhead tanpa input manual ulang.</p>
+                    </div>
+                </div>
+                <button type="button" @click="copyBomModal = false" class="text-slate-400 hover:text-slate-600 transition text-xl font-bold">
+                    &times;
+                </button>
+            </div>
+
+            <form action="{% url 'project_copy_bom' project.uuid %}" method="POST" class="space-y-4 text-xs">
+                {% csrf_token %}
+                <input type="hidden" name="source_project_uuid" :value="sourceProjectUuid">
+
+                <!-- Autocomplete Combobox Proyek Sumber -->
+                <div class="space-y-1.5">
+                    <label class="block font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+                        Pilih Proyek Sumber *
+                    </label>
+                    
+                    <div class="relative" @click.outside="projectDropdownOpen = false">
+                        <div class="relative">
+                            <input type="text" 
+                                   x-model="searchProject"
+                                   @focus="projectDropdownOpen = true"
+                                   @input="sourceProjectUuid = ''; selectedProject = null; projectDropdownOpen = true"
+                                   required
+                                   placeholder="Ketik kode atau nama proyek sumber..."
+                                   class="w-full rounded-lg border border-slate-300 pl-3.5 pr-10 py-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium">
+                            
+                            <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center">
+                                <button type="button" @click="projectDropdownOpen = !projectDropdownOpen" class="p-1 text-slate-400 hover:text-slate-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Dropdown options -->
+                        <div x-show="projectDropdownOpen" 
+                             class="absolute z-30 mt-1.5 w-full bg-white rounded-xl shadow-xl border border-slate-200 max-h-52 overflow-y-auto divide-y divide-slate-100"
+                             style="display: none;">
+                            <template x-for="p in filteredProjects" :key="p.uuid">
+                                <div @click="selectProject(p)"
+                                     class="p-2.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition"
+                                     :class="sourceProjectUuid === p.uuid ? 'bg-indigo-50 font-bold' : ''">
+                                    <div>
+                                        <div class="font-bold text-slate-800" x-text="'[' + p.code + '] ' + p.name"></div>
+                                        <div class="text-[11px] text-slate-400">Customer: <span x-text="p.customer"></span></div>
+                                    </div>
+                                    <div class="text-right text-[10px] text-indigo-600 font-semibold space-y-0.5">
+                                        <span class="bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100" x-text="p.bom_count + ' BOM'"></span>
+                                        <span class="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100" x-text="p.labor_count + ' Labor'"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="filteredProjects.length === 0">
+                                <div class="p-3 text-center text-slate-400 text-xs">Tidak ada proyek lain yang cocok.</div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview Info Proyek Terpilih -->
+                <template x-if="selectedProject">
+                    <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-1">
+                        <span class="font-bold text-indigo-900 block" x-text="'Rincian dari #' + selectedProject.code + ' - ' + selectedProject.name"></span>
+                        <div class="grid grid-cols-4 gap-2 text-center pt-1 text-[11px]">
+                            <div class="bg-white p-1.5 rounded border border-indigo-100 font-semibold text-slate-700">
+                                <span class="block text-indigo-600 font-bold text-sm" x-text="selectedProject.bom_count"></span>
+                                Bahan/BOM
+                            </div>
+                            <div class="bg-white p-1.5 rounded border border-indigo-100 font-semibold text-slate-700">
+                                <span class="block text-amber-600 font-bold text-sm" x-text="selectedProject.labor_count"></span>
+                                Tenaga Kerja
+                            </div>
+                            <div class="bg-white p-1.5 rounded border border-indigo-100 font-semibold text-slate-700">
+                                <span class="block text-purple-600 font-bold text-sm" x-text="selectedProject.overhead_count"></span>
+                                Overhead
+                            </div>
+                            <div class="bg-white p-1.5 rounded border border-indigo-100 font-semibold text-slate-700">
+                                <span class="block text-emerald-600 font-bold text-sm" x-text="selectedProject.fg_count"></span>
+                                Barang Jadi
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Checkbox Pilihan Apa Saja yang Ingin Disalin -->
+                <div class="space-y-2 pt-1">
+                    <label class="block font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+                        Pilih Komponen yang Ingin Disalin:
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center gap-2 p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold text-slate-700">
+                            <input type="checkbox" name="copy_bom" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
+                            <span>Struktur Bahan & BOM</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold text-slate-700">
+                            <input type="checkbox" name="copy_labor" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
+                            <span>Anggaran Tenaga Kerja</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold text-slate-700">
+                            <input type="checkbox" name="copy_overhead" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
+                            <span>Biaya Overhead</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold text-slate-700">
+                            <input type="checkbox" name="copy_fg" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
+                            <span>Barang Jadi Terkait</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Faktor Pengali Kuantitas (Multiplier) -->
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                    <label class="block font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+                        Faktor Pengali Kuantitas (Multiplier Qty)
+                    </label>
+                    <div class="flex items-center gap-3">
+                        <input type="number" step="0.1" min="0.1" name="multiplier" value="1.0" class="w-28 rounded-lg border border-slate-300 p-2 text-xs font-mono font-bold text-slate-800">
+                        <span class="text-slate-500 text-[11px]">Contoh: Jika pesanan proyek ini 2x lipat lebih banyak, masukkan <strong>2.0</strong>.</span>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" @click="copyBomModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-semibold transition">
+                        Batal
+                    </button>
+                    <button type="submit" :disabled="!sourceProjectUuid" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg font-bold shadow-md transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>
+                        <span>Salin ke Proyek Ini</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -1982,6 +2155,41 @@ function closeProjectModalController() {
             this.fgUuid = '';
             this.searchFg = '';
             this.fgDropdownOpen = true;
+        }
+    };
+}
+
+function copyBomModalController() {
+    const projectsData = {{ other_projects_json|safe }};
+    return {
+        projects: projectsData,
+        searchProject: '',
+        projectDropdownOpen: false,
+        selectedProject: null,
+        sourceProjectUuid: '',
+
+        get filteredProjects() {
+            if (!this.searchProject || this.sourceProjectUuid) return this.projects;
+            const q = this.searchProject.toLowerCase();
+            return this.projects.filter(p =>
+                p.name.toLowerCase().includes(q) ||
+                p.code.toLowerCase().includes(q) ||
+                (p.customer && p.customer.toLowerCase().includes(q))
+            );
+        },
+
+        selectProject(p) {
+            this.selectedProject = p;
+            this.sourceProjectUuid = p.uuid;
+            this.searchProject = `[${p.code}] ${p.name}`;
+            this.projectDropdownOpen = false;
+        },
+
+        clearProject() {
+            this.selectedProject = null;
+            this.sourceProjectUuid = '';
+            this.searchProject = '';
+            this.projectDropdownOpen = true;
         }
     };
 }

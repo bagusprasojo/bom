@@ -145,11 +145,11 @@
                             <span>&bull;</span>
                             <span>Daftar Barang Jadi</span>
                         </a>
-                        <a href="{% url 'stock_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/stock/mutations/' in request.path or '/finished-goods/mutations/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                        <a href="{% url 'finished_good_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/mutations/' in request.path and '/finished-goods/' in request.path or '/stock/mutations/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Mutasi Barang Jadi</span>
                         </a>
-                        <a href="{% url 'stock_card_index' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/stock/cards/' in request.path or '/finished-goods/cards/' in request.path or '/card/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
+                        <a href="{% url 'finished_good_stock_card_index' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/cards/' in request.path and '/finished-goods/' in request.path or '/stock/cards/' in request.path or '/finished-goods/' in request.path and '/card/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Kartu Stok Barang</span>
                         </a>
@@ -187,7 +187,7 @@
 
                 <!-- MASTER SATUAN (DI BAWAH SDM) -->
                 <div class="pt-2 border-t border-slate-800">
-                    <a href="/units/" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition {% if '/units/' in request.path %}bg-slate-800 text-violet-400 font-bold border-l-4 border-violet-500{% endif %}">
+                    <a href="{% url 'unit_list' %}" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition {% if '/units/' in request.path %}bg-slate-800 text-violet-400 font-bold border-l-4 border-violet-500{% endif %}">
                         <div class="flex items-center gap-2.5">
                             <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                             <span class="font-bold uppercase tracking-wider text-[11px]">Master Satuan</span>

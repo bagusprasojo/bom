@@ -1,4 +1,4 @@
-﻿{% extends "hpp/base.html" %}
+{% extends "hpp/base.html" %}
 {% load custom_filters %}
 
 {% block title %}Daftar Project & HPP - HPP & BOM{% endblock %}
@@ -132,6 +132,14 @@
                         <a href="{% url 'export_project_excel' p.uuid %}" class="inline-block text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-100 font-semibold">
                             Excel
                         </a>
+                        {% if p.status == 'draft' and not p.has_realizations %}
+                        <form action="{% url 'project_delete' p.uuid %}" method="POST" class="inline-block" onsubmit="return confirm('Apakah Anda yakin ingin menghapus proyek draft [{{ p.code }}] {{ p.name }}? Tindakan ini tidak dapat dibatalkan.');">
+                            {% csrf_token %}
+                            <button type="submit" class="inline-block text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 px-2 py-1 rounded font-semibold transition-colors" title="Hapus Draft Proyek">
+                                Hapus
+                            </button>
+                        </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}
