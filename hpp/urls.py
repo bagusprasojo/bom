@@ -12,6 +12,9 @@ urlpatterns = [
     path("projects/new/", views.project_create, name="project_create"),
     path("projects/<uuid:uuid>/", views.project_detail, name="project_detail"),
     path("projects/<uuid:uuid>/update/", views.project_update, name="project_update"),
+    path("projects/<uuid:uuid>/close/", views.project_close, name="project_close"),
+    path("projects/<uuid:uuid>/reopen/", views.project_reopen, name="project_reopen"),
+    path("projects/<uuid:uuid>/bap/", views.project_closing_bap, name="project_closing_bap"),
     
     # Master Satuan (Unit Master)
     path("units/", views_unit.unit_list, name="unit_list"),
@@ -46,6 +49,7 @@ urlpatterns = [
 
     # Realisasi Project Bertahap
     path("projects/realizations/", views_realization.project_realization_list, name="project_realization_list"),
+    path("projects/realizations/export/", views_realization.project_realization_export_excel, name="project_realization_export_excel"),
     path("projects/<uuid:uuid>/realization/", views_realization.project_realization_detail, name="project_realization_detail"),
     path("projects/<uuid:project_uuid>/realization/bom/add/", views_realization.realization_bom_add, name="realization_bom_add"),
     path("realization/bom/<uuid:uuid>/delete/", views_realization.realization_bom_delete, name="realization_bom_delete"),

@@ -18,7 +18,9 @@
     currentOverhead: {},
     addFgModal: false,
     editFgModal: false,
-    currentProjectFg: {}
+    currentProjectFg: {},
+    closeProjectModal: false,
+    reopenProjectModal: false
 }">
     <!-- Alert Message jika ada -->
     {% if messages %}
@@ -54,11 +56,66 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            {% if project.status != 'completed' %}
+            <button @click="closeProjectModal = true" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>Closing Project</span>
+            </button>
+            {% else %}
+            <a href="{% url 'project_closing_bap' project.uuid %}" target="_blank" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Cetak BAP</span>
+            </a>
+            <button @click="reopenProjectModal = true" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                <span>Buka Kembali</span>
+            </button>
+            {% endif %}
+            {% if project.status != 'completed' %}
             <button @click="editProjectModal = true" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition">Edit Status / Info</button>
+            {% endif %}
             <a href="{% url 'export_project_excel' project.uuid %}" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md transition shadow">Export Excel</a>
             <a href="{% url 'print_project_pdf' project.uuid %}" target="_blank" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md transition shadow">Print / PDF</a>
         </div>
     </div>
+
+    <!-- Banner Status Terkunci (Locked State) jika Proyek Selesai -->
+    {% if project.status == 'completed' %}
+    <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+        <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center text-lg font-bold border border-amber-300 shadow-sm shrink-0">
+                🔒
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-black text-amber-950 uppercase tracking-wide">Proyek Selesai & Ditutup (Locked)</h3>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
+                        {{ project.completed_date|date:"d M Y"|default:project.updated_at|date:"d M Y" }}
+                    </span>
+                    {% if project.stock_released %}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                        Hasil Produksi Masuk Gudang
+                    </span>
+                    {% endif %}
+                </div>
+                <p class="text-xs text-amber-800 mt-0.5">
+                    Seluruh data HPP, BOM, dan log realisasi telah dikunci untuk kepatuhan audit pembukuan. 
+                    {% if project.closing_notes %}<span class="italic">"{{ project.closing_notes }}"</span>{% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+            <a href="{% url 'project_closing_bap' project.uuid %}" target="_blank" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Cetak BAP Resmi</span>
+            </a>
+            <button @click="reopenProjectModal = true" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                <span>Buka Kembali Proyek</span>
+            </button>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Summary KPI Cards -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -123,7 +180,11 @@
     <div x-show="tab === 'bom'" class="space-y-4">
         <div class="flex justify-between items-center">
             <h2 class="text-lg font-bold text-slate-800">Daftar Bahan & Sub-Assembly (BOM)</h2>
+            {% if project.status != 'completed' %}
             <button @click="addBomModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Item BOM</button>
+            {% else %}
+            <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200">🔒 Terkunci (Proyek Selesai)</span>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -169,6 +230,7 @@
                             Rp {{ m.act_total|rupiah }}
                         </td>
                         <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                            {% if project.status != 'completed' %}
                             <button @click="currentBom = {
                                 id: '{{ m.uuid }}',
                                 name: '{{ m.name|escapejs }}',
@@ -187,6 +249,9 @@
                                 {% csrf_token %}
                                 <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold text-xs px-1">Hapus</button>
                             </form>
+                            {% else %}
+                            <span class="text-slate-400 text-xs italic">🔒 Terkunci</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -210,7 +275,11 @@
     <div x-show="tab === 'labor'" class="space-y-4" style="display: none;">
         <div class="flex justify-between items-center">
             <h2 class="text-lg font-bold text-slate-800">Biaya Tenaga Kerja</h2>
+            {% if project.status != 'completed' %}
             <button @click="addLaborModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Tenaga Kerja</button>
+            {% else %}
+            <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200">🔒 Terkunci (Proyek Selesai)</span>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -234,6 +303,7 @@
                         <td class="px-4 py-3 text-right text-slate-600">{{ l.act_quantity|rupiah }} {{ l.unit }} &times; Rp {{ l.act_rate|rupiah }}</td>
                         <td class="px-4 py-3 text-right font-semibold {% if l.act_total > l.est_total %}text-rose-600{% else %}text-slate-800{% endif %}">Rp {{ l.act_total|rupiah }}</td>
                         <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                            {% if project.status != 'completed' %}
                             <button @click="currentLabor = {
                                 id: '{{ l.uuid }}',
                                 role_name: '{{ l.role_name|escapejs }}',
@@ -248,6 +318,9 @@
                                 {% csrf_token %}
                                 <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold text-xs px-1">Hapus</button>
                             </form>
+                            {% else %}
+                            <span class="text-slate-400 text-xs italic">🔒 Terkunci</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -272,9 +345,13 @@
         <div class="flex justify-between items-center">
             <div>
                 <h2 class="text-lg font-bold text-slate-800">Daftar Barang Jadi Penyusun Project</h2>
-                <p class="text-xs text-slate-500">Stock barang jadi akan otomatis dipotong saat status project diubah menjadi <strong>Selesai (Completed)</strong>.</p>
+                <p class="text-xs text-slate-500">Komponen barang jadi pendukung yang dipakai dalam pengerjaan proyek.</p>
             </div>
+            {% if project.status != 'completed' %}
             <button @click="addFgModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Barang Jadi</button>
+            {% else %}
+            <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200">🔒 Terkunci (Proyek Selesai)</span>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -315,6 +392,7 @@
                             Rp {{ item.act_total|rupiah }}
                         </td>
                         <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                            {% if project.status != 'completed' %}
                             <button @click="currentProjectFg = {
                                 uuid: '{{ item.uuid }}',
                                 name: '{{ item.finished_good.name|escapejs }}',
@@ -330,6 +408,9 @@
                                 {% csrf_token %}
                                 <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold text-xs px-1">Hapus</button>
                             </form>
+                            {% else %}
+                            <span class="text-slate-400 text-xs italic">🔒 Terkunci</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -355,7 +436,11 @@
     <div x-show="tab === 'overhead'" class="space-y-4" style="display: none;">
         <div class="flex justify-between items-center">
             <h2 class="text-lg font-bold text-slate-800">Biaya Overhead / Lain-lain</h2>
+            {% if project.status != 'completed' %}
             <button @click="addOverheadModal = true" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow">+ Tambah Overhead</button>
+            {% else %}
+            <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200">🔒 Terkunci (Proyek Selesai)</span>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -375,6 +460,7 @@
                         <td class="px-4 py-3 text-right text-slate-800">Rp {{ o.est_cost|rupiah }}</td>
                         <td class="px-4 py-3 text-right font-semibold {% if o.act_cost > o.est_cost %}text-rose-600{% else %}text-slate-800{% endif %}">Rp {{ o.act_cost|rupiah }}</td>
                         <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                            {% if project.status != 'completed' %}
                             <button @click="currentOverhead = {
                                 id: '{{ o.uuid }}',
                                 name: '{{ o.name|escapejs }}',
@@ -386,6 +472,9 @@
                                 {% csrf_token %}
                                 <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold text-xs px-1">Hapus</button>
                             </form>
+                            {% else %}
+                            <span class="text-slate-400 text-xs italic">🔒 Terkunci</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -404,6 +493,274 @@
         </div>
     </div>
 
+    <!-- MODAL: Closing Project (Pre-Closing Audit, Financial Reconciliation & Optional Finished Goods Intake) -->
+    <div x-show="closeProjectModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="closeProjectModal = false" 
+             x-data="closeProjectModalController()"
+             class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 my-8">
+            
+            <div class="flex items-start justify-between border-b border-slate-100 pb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg">
+                        ✨
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-lg font-bold text-slate-900">Closing Project & Penutupan Resmi</h3>
+                            <span class="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">#{{ project.code }}</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Verifikasi kinerja HPP aktual vs anggaran sebelum menutup proyek secara permanen.</p>
+                    </div>
+                </div>
+                <button type="button" @click="closeProjectModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Ringkasan Kinerja Finansial (Audit Review) -->
+            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Rekapitulasi Finansial Akhir</span>
+                    {% if project.total_hpp_actual <= project.total_hpp_estimated %}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        ✅ Hemat (Under Budget)
+                    </span>
+                    {% else %}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                        ⚠️ Defisit (Over Budget)
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                    <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Nilai Kontrak</div>
+                        <div class="font-bold text-slate-900 font-mono mt-0.5">Rp {{ project.contract_value|rupiah }}</div>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Estimasi HPP</div>
+                        <div class="font-bold text-indigo-700 font-mono mt-0.5">Rp {{ project.total_hpp_estimated|rupiah }}</div>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                        <div class="text-[10px] text-slate-400 uppercase font-semibold">Realisasi HPP</div>
+                        <div class="font-bold {% if project.total_hpp_actual > project.total_hpp_estimated %}text-rose-600{% else %}text-slate-900{% endif %} font-mono mt-0.5">
+                            Rp {{ project.total_hpp_actual|rupiah }}
+                        </div>
+                    </div>
+                    <div class="bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200">
+                        <div class="text-[10px] text-emerald-800 uppercase font-bold">Gross Profit Riil</div>
+                        <div class="font-bold text-emerald-700 font-mono mt-0.5">Rp {{ project.act_gross_profit|rupiah }}</div>
+                        <div class="text-[9px] text-emerald-600 font-semibold">{{ project.act_margin_pct|rupiah }}% Margin</div>
+                    </div>
+                </div>
+
+                {% if project.total_hpp_actual == 0 %}
+                <div class="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
+                    <span class="text-sm">⚠️</span>
+                    <span><strong>Perhatian:</strong> Belum ada log realisasi biaya riil pada proyek ini. Jika proyek ditutup sekarang, seluruh pengeluaran dianggap 0.</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <form action="{% url 'project_close' project.uuid %}" method="POST" class="space-y-4">
+                {% csrf_token %}
+
+                <!-- Opsi Stock IN ke Gudang (Optional Checkbox) -->
+                <div class="p-3.5 bg-indigo-50/40 rounded-xl border border-indigo-100 space-y-3">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" 
+                               name="store_finished_good" 
+                               value="1" 
+                               x-model="storeFinishedGood" 
+                               class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+                        <div>
+                            <div class="text-xs font-bold text-slate-800">Simpan Hasil Produksi ke Persediaan Gudang (Stock IN)</div>
+                            <div class="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                Centang jika proyek ini menghasilkan Barang Jadi untuk persediaan showroom/toko (*Make-to-Stock*). Jika barang pesanan kustom langsung dikirim ke klien (*Make-to-Order*), <strong>biarkan tidak dicentang</strong>.
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Section Pilih Barang Jadi jika dicentang -->
+                    <div x-show="storeFinishedGood" x-transition class="space-y-3 pt-2 border-t border-indigo-100/70">
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                Pilih Master Barang Jadi yang Dihasilkan *
+                            </label>
+                            <div class="relative" @click.outside="fgDropdownOpen = false">
+                                <div class="relative">
+                                    <input type="text" 
+                                           x-model="searchFg"
+                                           @focus="fgDropdownOpen = true"
+                                           @input="fgUuid = ''; selectedFg = null; fgDropdownOpen = true"
+                                           placeholder="Ketik nama atau SKU barang jadi..."
+                                           class="w-full rounded-lg border border-slate-300 pl-3.5 pr-16 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition placeholder-slate-400">
+
+                                    <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+                                        <button type="button" x-show="searchFg" @click="clearFg()" class="p-1 text-slate-400 hover:text-slate-600 transition" title="Hapus">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                        <button type="button" @click="fgDropdownOpen = !fgDropdownOpen" class="p-1 text-slate-400 hover:text-slate-600 transition">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <input type="hidden" name="finished_good_uuid" :value="fgUuid">
+
+                                <div x-show="fgDropdownOpen" 
+                                     class="absolute z-30 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 max-h-48 overflow-y-auto divide-y divide-slate-100"
+                                     style="display: none;">
+                                    <template x-for="fg in filteredFinishedGoods" :key="fg.uuid">
+                                        <div @click="selectFg(fg)" 
+                                             class="p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between transition group"
+                                             :class="selectedFg && selectedFg.uuid === fg.uuid ? 'bg-indigo-50 font-semibold' : ''">
+                                            <div>
+                                                <div class="text-xs font-semibold text-slate-800 group-hover:text-indigo-900" x-text="fg.name"></div>
+                                                <div class="text-[10px] text-slate-400 font-mono" x-text="'SKU: ' + fg.sku"></div>
+                                            </div>
+                                            <div class="text-right">
+                                                <span class="text-[11px] font-bold text-slate-700 font-mono" x-text="fg.current_stock + ' ' + fg.unit"></span>
+                                                <div class="text-[9px] text-slate-400">Stok Saat Ini</div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="filteredFinishedGoods.length === 0" class="p-3 text-center text-xs text-slate-400">
+                                        Barang jadi tidak ditemukan.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                                    Jumlah Dihasilkan (Qty) *
+                                </label>
+                                <input type="number" step="0.01" min="0.01" name="finished_good_qty" x-model="fgQty" class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-mono font-bold">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                                    Catatan Batch / Lot
+                                </label>
+                                <input type="text" name="finished_good_notes" x-model="fgNotes" placeholder="Contoh: Batch 1 selesai QC..." class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tanggal Selesai & Catatan Evaluasi -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            Tanggal Selesai Resmi *
+                        </label>
+                        <input type="date" name="completed_date" value="{% now 'Y-m-d' %}" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            Catatan Evaluasi / Rekomendasi Akhir
+                        </label>
+                        <input type="text" name="closing_notes" placeholder="Catatan mutu, serah terima, atau garansi..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                    </div>
+                </div>
+
+                <!-- Konfirmasi Persetujuan Managerial -->
+                <label class="flex items-start gap-2.5 p-3 bg-slate-100 rounded-xl cursor-pointer text-xs text-slate-700">
+                    <input type="checkbox" required class="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+                    <span class="leading-relaxed">
+                        Saya mengonfirmasi bahwa seluruh pekerjaan proyek ini telah <strong>selesai 100%</strong> dan menyetujui <strong>penguncian data HPP</strong> untuk keperluan pembukuan & Berita Acara (BAP).
+                    </span>
+                </label>
+
+                <!-- Actions -->
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="closeProjectModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>Konfirmasi & Tutup Proyek</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Reopen Project -->
+    <div x-show="reopenProjectModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" 
+         style="display: none;">
+        
+        <div @click.outside="reopenProjectModal = false" 
+             class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            
+            <div class="flex items-start justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-base">
+                        🔓
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Buka Kembali Proyek (Reopen)</h3>
+                        <p class="text-xs text-slate-500">Membatalkan status Selesai untuk revisi HPP atau realisasi lapangan.</p>
+                    </div>
+                </div>
+                <button type="button" @click="reopenProjectModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-2">
+                <div class="font-bold flex items-center gap-1.5">
+                    <span>⚠️</span>
+                    <span>Implikasi Pembukaan Kembali Proyek:</span>
+                </div>
+                <ul class="list-disc list-inside space-y-1 text-amber-800 pl-1 leading-relaxed text-[11px]">
+                    <li>Status proyek dikembalikan menjadi <strong>Sedang Dikerjakan (In Progress)</strong> dengan progress 95%.</li>
+                    <li>Penguncian data akan dibuka sehingga Anda dapat mengedit item BOM, tenaga kerja, overhead, dan realisasi.</li>
+                    {% if project.stock_released %}
+                    <li class="font-semibold text-rose-800">Stok barang jadi yang pernah dimasukkan ke gudang saat closing akan ditarik kembali secara otomatis (*Rollback Stock OUT*).</li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <form action="{% url 'project_reopen' project.uuid %}" method="POST" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Alasan Pembukaan Kembali *
+                    </label>
+                    <textarea name="reopen_reason" rows="3" required placeholder="Contoh: Ada koreksi nota pembelian material tambahan atau penyesuaian jam kerja lapangan..." class="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500"></textarea>
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <button type="button" @click="reopenProjectModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-md transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                        <span>Buka Kembali Proyek</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL: Edit Project -->
     <div x-show="editProjectModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
         <div @click.away="editProjectModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
@@ -416,8 +773,15 @@
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kode</label>
-                        <input type="text" name="code" value="{{ project.code }}" required class="w-full rounded border border-slate-300 p-2 text-sm">
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">
+                            Kode
+                            {% if project.has_realizations %}
+                            <span class="text-[10px] text-amber-600 font-normal ml-1">🔒 (Terkunci)</span>
+                            {% endif %}
+                        </label>
+                        <input type="text" name="code" value="{{ project.code }}" required 
+                               {% if project.has_realizations %}readonly title="Kode proyek terkunci karena sudah ada transaksi/mutasi realisasi"{% endif %}
+                               class="w-full rounded border border-slate-300 p-2 text-sm {% if project.has_realizations %}bg-slate-100 text-slate-500 cursor-not-allowed font-mono{% endif %}">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Customer</label>
@@ -435,13 +799,17 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status</label>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Status Pengerjaan</label>
                     <select name="status" class="w-full rounded border border-slate-300 p-2 text-sm">
                         {% for code, label in status_choices %}
-                        <option value="{{ code }}" {% if project.status == code %}selected{% endif %}>{{ label }}</option>
+                            {% if code != 'completed' %}
+                            <option value="{{ code }}" {% if project.status == code %}selected{% endif %}>{{ label }}</option>
+                            {% endif %}
                         {% endfor %}
                     </select>
-                    <p class="text-[11px] text-amber-600 mt-1">Mengubah status ke <strong>Selesai (Completed)</strong> akan memotong persediaan stock barang jadi.</p>
+                    <p class="text-[11px] text-slate-500 mt-1">
+                        💡 Untuk penutupan proyek resmi & penguncian audit, gunakan tombol <strong>Closing Project</strong> di halaman utama.
+                    </p>
                 </div>
                 <div class="flex justify-end gap-2 pt-3 border-t">
                     <button type="button" @click="editProjectModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded">Batal</button>
@@ -1580,6 +1948,44 @@ function overheadAddModalController() {
         formatRupiah(val) {
             const num = parseFloat(val) || 0;
             return 'Rp ' + Math.round(num).toLocaleString('id-ID');
+        }
+    };
+}
+
+function closeProjectModalController() {
+    const finishedGoodsData = {{ master_finished_goods_json|safe }};
+    return {
+        storeFinishedGood: false,
+        finishedGoods: finishedGoodsData,
+        searchFg: '',
+        fgDropdownOpen: false,
+        selectedFg: null,
+        fgUuid: '',
+        fgQty: 1,
+        fgNotes: '',
+
+        get filteredFinishedGoods() {
+            if (!this.searchFg || this.fgUuid) return this.finishedGoods;
+            const q = this.searchFg.toLowerCase();
+            return this.finishedGoods.filter(fg =>
+                fg.name.toLowerCase().includes(q) ||
+                fg.sku.toLowerCase().includes(q) ||
+                (fg.category && fg.category.toLowerCase().includes(q))
+            );
+        },
+
+        selectFg(fg) {
+            this.selectedFg = fg;
+            this.fgUuid = fg.uuid;
+            this.searchFg = `[${fg.sku}] ${fg.name}`;
+            this.fgDropdownOpen = false;
+        },
+
+        clearFg() {
+            this.selectedFg = null;
+            this.fgUuid = '';
+            this.searchFg = '';
+            this.fgDropdownOpen = true;
         }
     };
 }

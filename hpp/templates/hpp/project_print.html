@@ -1,180 +1,561 @@
-﻿<!-- hpp/templates/hpp/project_print.html -->
+<!-- hpp/templates/hpp/project_print.html -->
 {% load custom_filters %}
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>HPP_{{ project.code }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laporan_HPP_{{ project.code }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @media print {
-            body { font-size: 11px; }
             .no-print { display: none !important; }
+            body { 
+                background: white !important; 
+                padding: 0 !important; 
+                font-size: 10.5px !important; 
+                color: #0f172a !important; 
+            }
+            @page { 
+                size: A4 portrait; 
+                margin: 10mm 10mm 12mm 10mm; 
+            }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            .card-box { border-color: #cbd5e1 !important; box-shadow: none !important; }
+        }
+        @media screen {
+            body { background-color: #f1f5f9; }
+            .print-container {
+                max-width: 210mm;
+                margin: 20px auto;
+                background: white;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            }
+        }
+        .tbl-compact th, .tbl-compact td {
+            padding: 4px 6px;
         }
     </style>
 </head>
-<body class="p-8 bg-white text-slate-800 font-sans" onload="window.print()">
-    <div class="flex justify-between items-start border-b pb-4 mb-6">
-        <div>
-            <h1 class="text-xl font-bold uppercase">Laporan HPP & Bill of Materials</h1>
-            <p class="text-sm text-slate-600 font-mono">Kode: {{ project.code }} | Status: {{ project.get_status_display }}</p>
-        </div>
-        <div class="text-right">
-            <div class="text-lg font-bold">{{ project.name }}</div>
-            <div class="text-xs text-slate-500">Customer: {{ project.customer_name|default:"-" }}</div>
+<body class="text-slate-800 font-sans antialiased text-xs">
+
+    <!-- Screen Toolbar (Hidden on Print) -->
+    <div class="no-print bg-slate-900 text-white py-3 px-6 sticky top-0 z-50 shadow-md">
+        <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <span class="font-bold text-sm tracking-wide text-indigo-300">PREVIEW CETAK DOKUMEN</span>
+                <span class="text-xs bg-slate-800 px-2.5 py-1 rounded font-mono text-slate-300">#{{ project.code }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="{% url 'export_project_excel' project.uuid %}" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span>Download Excel</span>
+                </a>
+                <button onclick="window.print()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    <span>Cetak Sekarang / Simpan PDF</span>
+                </button>
+                <button onclick="window.close()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-semibold transition">
+                    Tutup
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- Summary Box -->
-    <div class="grid grid-cols-4 gap-2 p-3 bg-slate-50 rounded border mb-6 text-xs">
-        <div>
-            <span class="text-slate-500 block">Nilai Kontrak:</span>
-            <strong>Rp {{ project.contract_value|rupiah }}</strong>
+    <!-- Main Printable Sheet -->
+    <div class="print-container p-8">
+        
+        <!-- Header Document -->
+        <div class="border-b-2 border-slate-900 pb-4 mb-5">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-xl font-black uppercase tracking-tight text-slate-900">LAPORAN BIAYA POKOK PRODUKSI (HPP)</h1>
+                    <p class="text-xs font-semibold text-indigo-950 uppercase tracking-widest mt-0.5">Bill of Materials, Tenaga Kerja, Barang Jadi & Realisasi Aktual</p>
+                </div>
+                <div class="text-right">
+                    <span class="inline-block px-2.5 py-1 text-[11px] font-mono font-bold rounded bg-slate-100 text-slate-800 border border-slate-300">
+                        {{ project.code }}
+                    </span>
+                    <p class="text-[10px] text-slate-500 mt-1">Dicetak: {{ now|date:"d M Y, H:i" }} WIB</p>
+                </div>
+            </div>
         </div>
-        <div>
-            <span class="text-slate-500 block">Estimasi HPP:</span>
-            <strong>Rp {{ project.total_hpp_estimated|rupiah }}</strong>
+
+        <!-- Project Metadata Card -->
+        <div class="grid grid-cols-2 gap-4 bg-slate-50 border border-slate-200 rounded-lg p-3.5 mb-5 card-box">
+            <div class="space-y-1.5">
+                <div class="flex"><span class="w-28 text-slate-500 font-medium">Nama Project:</span><span class="font-bold text-slate-900 flex-1">{{ project.name }}</span></div>
+                <div class="flex"><span class="w-28 text-slate-500 font-medium">Customer:</span><span class="font-semibold text-slate-800 flex-1">{{ project.customer_name|default:"-" }}</span></div>
+                <div class="flex"><span class="w-28 text-slate-500 font-medium">Nilai Kontrak:</span><span class="font-bold text-indigo-950 font-mono flex-1">Rp {{ project.contract_value|rupiah }}</span></div>
+            </div>
+            <div class="space-y-1.5 border-l pl-4 border-slate-200">
+                <div class="flex"><span class="w-28 text-slate-500 font-medium">Status:</span>
+                    <span class="font-bold px-2 py-0.2 rounded text-[10px] uppercase
+                        {% if project.status == 'completed' %}bg-emerald-100 text-emerald-800
+                        {% elif project.status == 'in_progress' %}bg-blue-100 text-blue-800
+                        {% elif project.status == 'cancelled' %}bg-rose-100 text-rose-800
+                        {% else %}bg-slate-200 text-slate-800{% endif %}">
+                        {{ project.get_status_display }}
+                    </span>
+                </div>
+                <div class="flex"><span class="w-28 text-slate-500 font-medium">Progress Fisik:</span><span class="font-bold text-slate-900 flex-1">{{ project.progress_percentage }}%</span></div>
+                <div class="flex"><span class="w-28 text-slate-500 font-medium">Periode Kerja:</span><span class="text-slate-700 flex-1">{{ project.start_date|default:"-" }} s/d {{ project.target_date|default:"-" }}</span></div>
+            </div>
         </div>
-        <div>
-            <span class="text-slate-500 block">Realisasi HPP:</span>
-            <strong>Rp {{ project.total_hpp_actual|rupiah }}</strong>
+
+        <!-- Executive Financial KPI Summary -->
+        <div class="grid grid-cols-4 gap-2 mb-6">
+            <div class="border border-slate-200 bg-white rounded p-2.5 card-box">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Nilai Penjualan / Kontrak</span>
+                <span class="text-sm font-black text-slate-900 font-mono block mt-1">Rp {{ project.contract_value|rupiah }}</span>
+            </div>
+            <div class="border border-slate-200 bg-white rounded p-2.5 card-box">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estimasi Total HPP</span>
+                <span class="text-sm font-black text-slate-700 font-mono block mt-1">Rp {{ project.total_hpp_estimated|rupiah }}</span>
+            </div>
+            <div class="border border-slate-200 bg-white rounded p-2.5 card-box">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Realisasi Total HPP</span>
+                <span class="text-sm font-black {% if project.total_hpp_actual > project.total_hpp_estimated %}text-rose-700{% else %}text-emerald-700{% endif %} font-mono block mt-1">
+                    Rp {{ project.total_hpp_actual|rupiah }}
+                </span>
+            </div>
+            <div class="border border-slate-200 bg-white rounded p-2.5 card-box">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Laba Kotor Aktual</span>
+                <span class="text-sm font-black {% if project.act_gross_profit < 0 %}text-rose-700{% else %}text-emerald-700{% endif %} font-mono block mt-1">
+                    Rp {{ project.act_gross_profit|rupiah }}
+                </span>
+                <span class="text-[10px] text-slate-500 block">Margin: {{ project.act_margin_pct|rupiah }}%</span>
+            </div>
         </div>
-        <div>
-            <span class="text-slate-500 block">Gross Profit (Real):</span>
-            <strong class="{% if project.act_gross_profit < 0 %}text-rose-600{% else %}text-emerald-700{% endif %}">
-                Rp {{ project.act_gross_profit|rupiah }} ({{ project.act_margin_pct|rupiah }}%)
-            </strong>
+
+        <!-- SECTION 1: MATERIAL (BOM) -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center bg-slate-900 text-white px-3 py-1.5 rounded-t">
+                <h2 class="font-bold text-xs uppercase tracking-wider">1. Bill of Materials (BOM) & Bahan Baku</h2>
+                <span class="text-[10px] text-slate-300 font-mono font-medium">Subtotal: Rp {{ project.total_act_material|rupiah }}</span>
+            </div>
+            <table class="w-full tbl-compact border-collapse border border-slate-200 text-left">
+                <thead class="bg-slate-100 text-[10px] text-slate-700 font-bold border-b border-slate-300">
+                    <tr>
+                        <th class="border border-slate-200 text-center w-7">No</th>
+                        <th class="border border-slate-200">Item / Material</th>
+                        <th class="border border-slate-200 text-center w-16">Tipe</th>
+                        <th class="border border-slate-200 text-right w-20">Est. Qty</th>
+                        <th class="border border-slate-200 text-right w-24">Est. Satuan</th>
+                        <th class="border border-slate-200 text-right w-24">Est. Total</th>
+                        <th class="border border-slate-200 text-right w-20">Real. Qty</th>
+                        <th class="border border-slate-200 text-right w-24">Real. Total</th>
+                        <th class="border border-slate-200 text-right w-24">Selisih</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 text-[11px]">
+                    {% for m in materials %}
+                    {% with diff=m.act_total|default:0 %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="border border-slate-200 text-center text-slate-400">{{ forloop.counter }}</td>
+                        <td class="border border-slate-200 font-medium text-slate-900 {% if m.parent %}pl-4 text-slate-700{% endif %}">
+                            {{ m.name }}
+                        </td>
+                        <td class="border border-slate-200 text-center text-[10px]">
+                            <span class="px-1.5 py-0.5 rounded {% if m.item_type == 'assembly' %}bg-indigo-50 text-indigo-700 font-semibold{% else %}text-slate-500{% endif %}">
+                                {{ m.get_item_type_display }}
+                            </span>
+                        </td>
+                        <td class="border border-slate-200 text-right font-mono">{{ m.est_qty|rupiah }} {{ m.unit }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ m.est_unit_cost|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-medium">Rp {{ m.est_total|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">
+                            {% if m.realizations.exists %}
+                                {{ m.total_realized_qty|rupiah }} {{ m.unit }}
+                            {% else %}
+                                {{ m.act_qty|rupiah }} {{ m.unit }}
+                            {% endif %}
+                        </td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-slate-900">Rp {{ m.act_total|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold 
+                            {% if m.act_total > m.est_total %}text-rose-600{% elif m.act_total < m.est_total %}text-emerald-600{% else %}text-slate-400{% endif %}">
+                            Rp {{ m.act_total|subtract:m.est_total|rupiah }}
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% empty %}
+                    <tr><td colspan="9" class="p-2 text-center text-slate-400 border">Tidak ada material yang direncanakan.</td></tr>
+                    {% endfor %}
+
+                    <!-- Log Material Substitusi jika ada -->
+                    {% for r in bom_realizations %}
+                    {% if r.is_substitute or not r.bom_item %}
+                    <tr class="bg-amber-50/50">
+                        <td class="border border-slate-200 text-center text-amber-700 font-bold">*</td>
+                        <td class="border border-slate-200 font-medium text-amber-900">
+                            [Substitusi] {{ r.item_name }}
+                            {% if r.notes %}<span class="text-[9px] text-slate-500 block">Catatan: {{ r.notes }}</span>{% endif %}
+                        </td>
+                        <td class="border border-slate-200 text-center text-[10px] text-amber-700 font-bold">Substitusi</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-400">-</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-400">-</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-400">Rp 0</td>
+                        <td class="border border-slate-200 text-right font-mono">{{ r.qty|rupiah }} {{ r.unit }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-slate-900">Rp {{ r.total_cost|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-rose-600">+Rp {{ r.total_cost|rupiah }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-100 font-bold text-[11px] border-t-2 border-slate-300">
+                    <tr>
+                        <td colspan="5" class="border border-slate-200 text-right px-2 py-1.5">SUBTOTAL MATERIAL:</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono">Rp {{ project.total_est_material|rupiah }}</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5"></td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono text-slate-900">Rp {{ project.total_act_material|rupiah }}</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono {% if project.total_act_material > project.total_est_material %}text-rose-700{% else %}text-emerald-700{% endif %}">
+                            Rp {{ project.total_act_material|subtract:project.total_est_material|rupiah }}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
+
+        <!-- SECTION 2: LABOR -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center bg-slate-900 text-white px-3 py-1.5 rounded-t">
+                <h2 class="font-bold text-xs uppercase tracking-wider">2. Biaya Tenaga Kerja (Labor)</h2>
+                <span class="text-[10px] text-slate-300 font-mono font-medium">Subtotal: Rp {{ project.total_act_labor|rupiah }}</span>
+            </div>
+            <table class="w-full tbl-compact border-collapse border border-slate-200 text-left">
+                <thead class="bg-slate-100 text-[10px] text-slate-700 font-bold border-b border-slate-300">
+                    <tr>
+                        <th class="border border-slate-200 text-center w-7">No</th>
+                        <th class="border border-slate-200">Peran / Posisi Tenaga Kerja</th>
+                        <th class="border border-slate-200 text-center w-16">Satuan</th>
+                        <th class="border border-slate-200 text-right w-20">Est. Vol</th>
+                        <th class="border border-slate-200 text-right w-24">Est. Tarif</th>
+                        <th class="border border-slate-200 text-right w-24">Est. Total</th>
+                        <th class="border border-slate-200 text-right w-20">Real. Vol</th>
+                        <th class="border border-slate-200 text-right w-24">Real. Total</th>
+                        <th class="border border-slate-200 text-right w-24">Selisih</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 text-[11px]">
+                    {% for l in labors %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="border border-slate-200 text-center text-slate-400">{{ forloop.counter }}</td>
+                        <td class="border border-slate-200 font-medium text-slate-900">{{ l.role_name }}</td>
+                        <td class="border border-slate-200 text-center text-[10px] text-slate-500">{{ l.unit }}</td>
+                        <td class="border border-slate-200 text-right font-mono">{{ l.est_quantity|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ l.est_rate|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-medium">Rp {{ l.est_total|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">
+                            {% if l.realizations.exists %}
+                                {{ l.total_realized_quantity|rupiah }}
+                            {% else %}
+                                {{ l.act_quantity|rupiah }}
+                            {% endif %}
+                        </td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-slate-900">Rp {{ l.act_total|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold
+                            {% if l.act_total > l.est_total %}text-rose-600{% elif l.act_total < l.est_total %}text-emerald-600{% else %}text-slate-400{% endif %}">
+                            Rp {{ l.act_total|subtract:l.est_total|rupiah }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="p-2 text-center text-slate-400 border">Tidak ada biaya tenaga kerja.</td></tr>
+                    {% endfor %}
+
+                    <!-- Log Tenaga Tambahan jika ada -->
+                    {% for lr in labor_realizations %}
+                    {% if lr.is_additional or not lr.project_labor %}
+                    <tr class="bg-amber-50/50">
+                        <td class="border border-slate-200 text-center text-amber-700 font-bold">*</td>
+                        <td class="border border-slate-200 font-medium text-amber-900">[Tambahan] {{ lr.role_name }}</td>
+                        <td class="border border-slate-200 text-center text-[10px] text-slate-500">{{ lr.unit }}</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-400">-</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-400">-</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-400">Rp 0</td>
+                        <td class="border border-slate-200 text-right font-mono">{{ lr.quantity|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-slate-900">Rp {{ lr.total_cost|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-rose-600">+Rp {{ lr.total_cost|rupiah }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-100 font-bold text-[11px] border-t-2 border-slate-300">
+                    <tr>
+                        <td colspan="5" class="border border-slate-200 text-right px-2 py-1.5">SUBTOTAL TENAGA KERJA:</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono">Rp {{ project.total_est_labor|rupiah }}</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5"></td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono text-slate-900">Rp {{ project.total_act_labor|rupiah }}</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono {% if project.total_act_labor > project.total_est_labor %}text-rose-700{% else %}text-emerald-700{% endif %}">
+                            Rp {{ project.total_act_labor|subtract:project.total_est_labor|rupiah }}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- SECTION 3: FINISHED GOODS -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center bg-slate-900 text-white px-3 py-1.5 rounded-t">
+                <h2 class="font-bold text-xs uppercase tracking-wider">3. Barang Jadi (Finished Goods)</h2>
+                <span class="text-[10px] text-slate-300 font-mono font-medium">Subtotal: Rp {{ project.total_act_finished_goods|rupiah }}</span>
+            </div>
+            <table class="w-full tbl-compact border-collapse border border-slate-200 text-left">
+                <thead class="bg-slate-100 text-[10px] text-slate-700 font-bold border-b border-slate-300">
+                    <tr>
+                        <th class="border border-slate-200 text-center w-7">No</th>
+                        <th class="border border-slate-200">SKU & Nama Barang Jadi</th>
+                        <th class="border border-slate-200 text-center w-16">Satuan</th>
+                        <th class="border border-slate-200 text-right w-20">Est. Qty</th>
+                        <th class="border border-slate-200 text-right w-24">Est. Harga</th>
+                        <th class="border border-slate-200 text-right w-24">Est. Total</th>
+                        <th class="border border-slate-200 text-right w-20">Real. Qty</th>
+                        <th class="border border-slate-200 text-right w-24">Real. Total</th>
+                        <th class="border border-slate-200 text-right w-24">Selisih</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 text-[11px]">
+                    {% for fg in finished_goods %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="border border-slate-200 text-center text-slate-400">{{ forloop.counter }}</td>
+                        <td class="border border-slate-200 font-medium text-slate-900">
+                            <span class="font-mono text-[10px] text-indigo-700 font-bold mr-1">[{{ fg.finished_good.sku }}]</span>
+                            {{ fg.finished_good.name }}
+                        </td>
+                        <td class="border border-slate-200 text-center text-[10px] text-slate-500">{{ fg.finished_good.unit }}</td>
+                        <td class="border border-slate-200 text-right font-mono">{{ fg.est_qty|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ fg.est_unit_cost|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-medium">Rp {{ fg.est_total|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">
+                            {% if fg.realizations.exists %}
+                                {{ fg.total_realized_qty|rupiah }}
+                            {% else %}
+                                {{ fg.act_qty|rupiah }}
+                            {% endif %}
+                        </td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-slate-900">Rp {{ fg.act_total|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold
+                            {% if fg.act_total > fg.est_total %}text-rose-600{% elif fg.act_total < fg.est_total %}text-emerald-600{% else %}text-slate-400{% endif %}">
+                            Rp {{ fg.act_total|subtract:fg.est_total|rupiah }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="p-2 text-center text-slate-400 border">Tidak ada alokasi barang jadi.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-100 font-bold text-[11px] border-t-2 border-slate-300">
+                    <tr>
+                        <td colspan="5" class="border border-slate-200 text-right px-2 py-1.5">SUBTOTAL BARANG JADI:</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono">Rp {{ project.total_est_finished_goods|rupiah }}</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5"></td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono text-slate-900">Rp {{ project.total_act_finished_goods|rupiah }}</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono {% if project.total_act_finished_goods > project.total_est_finished_goods %}text-rose-700{% else %}text-emerald-700{% endif %}">
+                            Rp {{ project.total_act_finished_goods|subtract:project.total_est_finished_goods|rupiah }}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- SECTION 4: OVERHEAD -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center bg-slate-900 text-white px-3 py-1.5 rounded-t">
+                <h2 class="font-bold text-xs uppercase tracking-wider">4. Biaya Overhead & Biaya Lainnya</h2>
+                <span class="text-[10px] text-slate-300 font-mono font-medium">Subtotal: Rp {{ project.total_act_overhead|rupiah }}</span>
+            </div>
+            <table class="w-full tbl-compact border-collapse border border-slate-200 text-left">
+                <thead class="bg-slate-100 text-[10px] text-slate-700 font-bold border-b border-slate-300">
+                    <tr>
+                        <th class="border border-slate-200 text-center w-7">No</th>
+                        <th class="border border-slate-200">Deskripsi Biaya Overhead / Operasional</th>
+                        <th class="border border-slate-200 text-right w-32">Estimasi Biaya</th>
+                        <th class="border border-slate-200 text-right w-32">Realisasi Biaya</th>
+                        <th class="border border-slate-200 text-right w-32">Selisih Biaya</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 text-[11px]">
+                    {% for o in overheads %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="border border-slate-200 text-center text-slate-400">{{ forloop.counter }}</td>
+                        <td class="border border-slate-200 font-medium text-slate-900">{{ o.name }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ o.est_cost|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-slate-900">Rp {{ o.act_cost|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold
+                            {% if o.act_cost > o.est_cost %}text-rose-600{% elif o.act_cost < o.est_cost %}text-emerald-600{% else %}text-slate-400{% endif %}">
+                            Rp {{ o.act_cost|subtract:o.est_cost|rupiah }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="p-2 text-center text-slate-400 border">Tidak ada biaya overhead.</td></tr>
+                    {% endfor %}
+
+                    <!-- Overhead Tambahan jika ada -->
+                    {% for orh in overhead_realizations %}
+                    {% if orh.is_additional or not orh.project_overhead %}
+                    <tr class="bg-amber-50/50">
+                        <td class="border border-slate-200 text-center text-amber-700 font-bold">*</td>
+                        <td class="border border-slate-200 font-medium text-amber-900">[Tambahan] {{ orh.expense_name }}</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-400">Rp 0</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-slate-900">Rp {{ orh.cost|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-semibold text-rose-600">+Rp {{ orh.cost|rupiah }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-100 font-bold text-[11px] border-t-2 border-slate-300">
+                    <tr>
+                        <td colspan="2" class="border border-slate-200 text-right px-2 py-1.5">SUBTOTAL OVERHEAD:</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono">Rp {{ project.total_est_overhead|rupiah }}</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono text-slate-900">Rp {{ project.total_act_overhead|rupiah }}</td>
+                        <td class="border border-slate-200 text-right px-2 py-1.5 font-mono {% if project.total_act_overhead > project.total_est_overhead %}text-rose-700{% else %}text-emerald-700{% endif %}">
+                            Rp {{ project.total_act_overhead|subtract:project.total_est_overhead|rupiah }}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- SECTION 5: EXECUTIVE SUMMARY COMPARISON & PROFIT MARGIN -->
+        <div class="mb-8">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-900 mb-2 border-b-2 border-slate-900 pb-1">
+                5. Ringkasan & Analisis Margin Keuntungan
+            </h2>
+            <table class="w-full tbl-compact border-collapse border border-slate-200 text-left">
+                <thead class="bg-slate-100 text-[10px] text-slate-700 font-bold border-b border-slate-300">
+                    <tr>
+                        <th class="border border-slate-200">Komponen Biaya & Pendapatan</th>
+                        <th class="border border-slate-200 text-right w-36">Estimasi (Rencana)</th>
+                        <th class="border border-slate-200 text-right w-36">Realisasi (Aktual)</th>
+                        <th class="border border-slate-200 text-right w-36">Deviasi (Selisih)</th>
+                        <th class="border border-slate-200 text-center w-28">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 text-[11px]">
+                    <tr>
+                        <td class="border border-slate-200 font-medium">1. Biaya Material (BOM)</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_est_material|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_act_material|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-medium">Rp {{ project.total_act_material|subtract:project.total_est_material|rupiah }}</td>
+                        <td class="border border-slate-200 text-center text-[10px]">
+                            {% if project.total_act_material > project.total_est_material %}<span class="text-rose-700 font-bold">Over Budget</span>
+                            {% elif project.total_act_material < project.total_est_material %}<span class="text-emerald-700 font-bold">Hemat</span>
+                            {% else %}<span class="text-slate-400">Sesuai</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 font-medium">2. Biaya Tenaga Kerja (Labor)</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_est_labor|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_act_labor|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-medium">Rp {{ project.total_act_labor|subtract:project.total_est_labor|rupiah }}</td>
+                        <td class="border border-slate-200 text-center text-[10px]">
+                            {% if project.total_act_labor > project.total_est_labor %}<span class="text-rose-700 font-bold">Over Budget</span>
+                            {% elif project.total_act_labor < project.total_est_labor %}<span class="text-emerald-700 font-bold">Hemat</span>
+                            {% else %}<span class="text-slate-400">Sesuai</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 font-medium">3. Biaya Barang Jadi (Finished Goods)</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_est_finished_goods|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_act_finished_goods|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-medium">Rp {{ project.total_act_finished_goods|subtract:project.total_est_finished_goods|rupiah }}</td>
+                        <td class="border border-slate-200 text-center text-[10px]">
+                            {% if project.total_act_finished_goods > project.total_est_finished_goods %}<span class="text-rose-700 font-bold">Over Budget</span>
+                            {% elif project.total_act_finished_goods < project.total_est_finished_goods %}<span class="text-emerald-700 font-bold">Hemat</span>
+                            {% else %}<span class="text-slate-400">Sesuai</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 font-medium">4. Biaya Overhead & Lainnya</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_est_overhead|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_act_overhead|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono font-medium">Rp {{ project.total_act_overhead|subtract:project.total_est_overhead|rupiah }}</td>
+                        <td class="border border-slate-200 text-center text-[10px]">
+                            {% if project.total_act_overhead > project.total_est_overhead %}<span class="text-rose-700 font-bold">Over Budget</span>
+                            {% elif project.total_act_overhead < project.total_est_overhead %}<span class="text-emerald-700 font-bold">Hemat</span>
+                            {% else %}<span class="text-slate-400">Sesuai</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr class="bg-indigo-50/70 font-bold text-indigo-950">
+                        <td class="border border-slate-200 font-bold uppercase">TOTAL BIAYA HPP PROJECT</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.total_hpp_estimated|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-900">Rp {{ project.total_hpp_actual|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono {% if project.total_hpp_actual > project.total_hpp_estimated %}text-rose-700{% else %}text-emerald-700{% endif %}">
+                            Rp {{ project.total_hpp_actual|subtract:project.total_hpp_estimated|rupiah }}
+                        </td>
+                        <td class="border border-slate-200 text-center text-[10px]">
+                            {% if project.total_hpp_actual > project.total_hpp_estimated %}<span class="text-rose-700 font-bold">Over Budget</span>
+                            {% elif project.total_hpp_actual < project.total_hpp_estimated %}<span class="text-emerald-700 font-bold">Hemat</span>
+                            {% else %}<span class="text-slate-600">Sesuai Budget</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr class="font-semibold">
+                        <td class="border border-slate-200">Nilai Kontrak / Penjualan</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.contract_value|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.contract_value|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono text-slate-400">-</td>
+                        <td class="border border-slate-200 text-center text-slate-400 text-[10px]">-</td>
+                    </tr>
+                    <tr class="bg-emerald-50/70 font-bold text-emerald-950">
+                        <td class="border border-slate-200 font-bold">Gross Profit (Laba Kotor)</td>
+                        <td class="border border-slate-200 text-right font-mono">Rp {{ project.est_gross_profit|rupiah }}</td>
+                        <td class="border border-slate-200 text-right font-mono {% if project.act_gross_profit < 0 %}text-rose-700{% else %}text-emerald-800{% endif %}">
+                            Rp {{ project.act_gross_profit|rupiah }}
+                        </td>
+                        <td class="border border-slate-200 text-right font-mono">
+                            Rp {{ project.act_gross_profit|subtract:project.est_gross_profit|rupiah }}
+                        </td>
+                        <td class="border border-slate-200 text-center text-[10px]">
+                            {% if project.act_gross_profit > project.est_gross_profit %}<span class="text-emerald-700 font-bold">Profit Naik</span>
+                            {% elif project.act_gross_profit < project.est_gross_profit %}<span class="text-rose-700 font-bold">Profit Turun</span>
+                            {% else %}<span class="text-slate-600">Sesuai Target</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr class="font-bold bg-slate-50">
+                        <td class="border border-slate-200">Margin Keuntungan (%)</td>
+                        <td class="border border-slate-200 text-right font-mono">{{ project.est_margin_pct|rupiah }}%</td>
+                        <td class="border border-slate-200 text-right font-mono {% if project.act_margin_pct < 0 %}text-rose-700{% else %}text-emerald-800{% endif %}">
+                            {{ project.act_margin_pct|rupiah }}%
+                        </td>
+                        <td class="border border-slate-200 text-right font-mono">
+                            {{ project.act_margin_pct|subtract:project.est_margin_pct|rupiah }}%
+                        </td>
+                        <td class="border border-slate-200 text-center text-slate-400 text-[10px]">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 3-COLUMN SIGNATURE & APPROVAL BLOCK -->
+        <div class="mt-8 pt-4 border-t-2 border-slate-900 break-inside-avoid">
+            <div class="grid grid-cols-3 gap-6 text-center text-xs">
+                <div>
+                    <p class="font-semibold text-slate-600">Dibuat Oleh,</p>
+                    <p class="text-[10px] text-slate-400 mb-14">Estimator / Admin Project</p>
+                    <div class="border-b border-slate-800 mx-6"></div>
+                    <p class="font-bold text-slate-900 mt-1.5">( ..................................... )</p>
+                    <p class="text-[9px] text-slate-500">Tgl: _____ / _____ / 20___</p>
+                </div>
+                <div>
+                    <p class="font-semibold text-slate-600">Diverifikasi Oleh,</p>
+                    <p class="text-[10px] text-slate-400 mb-14">Project Manager / Site Manager</p>
+                    <div class="border-b border-slate-800 mx-6"></div>
+                    <p class="font-bold text-slate-900 mt-1.5">( ..................................... )</p>
+                    <p class="text-[9px] text-slate-500">Tgl: _____ / _____ / 20___</p>
+                </div>
+                <div>
+                    <p class="font-semibold text-slate-600">Disetujui Oleh,</p>
+                    <p class="text-[10px] text-slate-400 mb-14">Direktur / Manajemen</p>
+                    <div class="border-b border-slate-800 mx-6"></div>
+                    <p class="font-bold text-slate-900 mt-1.5">( ..................................... )</p>
+                    <p class="text-[9px] text-slate-500">Tgl: _____ / _____ / 20___</p>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    <!-- Section 1: BOM -->
-    <div class="mb-6">
-        <h2 class="font-bold text-sm border-b pb-1 mb-2 uppercase text-indigo-900">1. Bill of Materials (BOM)</h2>
-        <table class="w-full text-left text-xs border-collapse border border-slate-200">
-            <thead class="bg-slate-100">
-                <tr>
-                    <th class="p-1.5 border">Item / Material</th>
-                    <th class="p-1.5 border">Tipe</th>
-                    <th class="p-1.5 border text-right">Est. Qty</th>
-                    <th class="p-1.5 border text-right">Est. Satuan</th>
-                    <th class="p-1.5 border text-right">Est. Total</th>
-                    <th class="p-1.5 border text-right">Real. Qty</th>
-                    <th class="p-1.5 border text-right">Real. Satuan</th>
-                    <th class="p-1.5 border text-right">Real. Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for m in materials %}
-                <tr>
-                    <td class="p-1.5 border {% if m.parent %}pl-4{% endif %}">{{ m.name }}</td>
-                    <td class="p-1.5 border">{{ m.get_item_type_display }}</td>
-                    <td class="p-1.5 border text-right">{{ m.est_qty|rupiah }} {{ m.unit }}</td>
-                    <td class="p-1.5 border text-right">Rp {{ m.est_unit_cost|rupiah }}</td>
-                    <td class="p-1.5 border text-right font-medium">Rp {{ m.est_total|rupiah }}</td>
-                    <td class="p-1.5 border text-right">{{ m.act_qty|rupiah }} {{ m.unit }}</td>
-                    <td class="p-1.5 border text-right">Rp {{ m.act_unit_cost|rupiah }}</td>
-                    <td class="p-1.5 border text-right font-semibold">Rp {{ m.act_total|rupiah }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="8" class="p-2 text-center text-slate-400 border">Tidak ada material.</td></tr>
-                {% endfor %}
-            </tbody>
-            <tfoot class="bg-slate-50 font-bold">
-                <tr>
-                    <td colspan="4" class="p-1.5 border text-right">Subtotal Material:</td>
-                    <td class="p-1.5 border text-right">Rp {{ project.total_est_material|rupiah }}</td>
-                    <td colspan="2" class="p-1.5 border"></td>
-                    <td class="p-1.5 border text-right">Rp {{ project.total_act_material|rupiah }}</td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-
-    <!-- Section 2: Labor -->
-    <div class="mb-6">
-        <h2 class="font-bold text-sm border-b pb-1 mb-2 uppercase text-indigo-900">2. Biaya Tenaga Kerja</h2>
-        <table class="w-full text-left text-xs border-collapse border border-slate-200">
-            <thead class="bg-slate-100">
-                <tr>
-                    <th class="p-1.5 border">Peran</th>
-                    <th class="p-1.5 border text-right">Est. Volume</th>
-                    <th class="p-1.5 border text-right">Est. Tarif</th>
-                    <th class="p-1.5 border text-right">Est. Total</th>
-                    <th class="p-1.5 border text-right">Real. Volume</th>
-                    <th class="p-1.5 border text-right">Real. Tarif</th>
-                    <th class="p-1.5 border text-right">Real. Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for l in labors %}
-                <tr>
-                    <td class="p-1.5 border">{{ l.role_name }}</td>
-                    <td class="p-1.5 border text-right">{{ l.est_quantity|rupiah }} {{ l.unit }}</td>
-                    <td class="p-1.5 border text-right">Rp {{ l.est_rate|rupiah }}</td>
-                    <td class="p-1.5 border text-right font-medium">Rp {{ l.est_total|rupiah }}</td>
-                    <td class="p-1.5 border text-right">{{ l.act_quantity|rupiah }} {{ l.unit }}</td>
-                    <td class="p-1.5 border text-right">Rp {{ l.act_rate|rupiah }}</td>
-                    <td class="p-1.5 border text-right font-semibold">Rp {{ l.act_total|rupiah }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="7" class="p-2 text-center text-slate-400 border">Tidak ada tenaga kerja.</td></tr>
-                {% endfor %}
-            </tbody>
-            <tfoot class="bg-slate-50 font-bold">
-                <tr>
-                    <td colspan="3" class="p-1.5 border text-right">Subtotal Tenaga:</td>
-                    <td class="p-1.5 border text-right">Rp {{ project.total_est_labor|rupiah }}</td>
-                    <td colspan="2" class="p-1.5 border"></td>
-                    <td class="p-1.5 border text-right">Rp {{ project.total_act_labor|rupiah }}</td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-
-    <!-- Section 3: Overhead -->
-    <div class="mb-6">
-        <h2 class="font-bold text-sm border-b pb-1 mb-2 uppercase text-indigo-900">3. Biaya Overhead & Lainnya</h2>
-        <table class="w-full text-left text-xs border-collapse border border-slate-200">
-            <thead class="bg-slate-100">
-                <tr>
-                    <th class="p-1.5 border">Deskripsi</th>
-                    <th class="p-1.5 border text-right">Est. Biaya</th>
-                    <th class="p-1.5 border text-right">Real. Biaya</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for o in overheads %}
-                <tr>
-                    <td class="p-1.5 border">{{ o.name }}</td>
-                    <td class="p-1.5 border text-right">Rp {{ o.est_cost|rupiah }}</td>
-                    <td class="p-1.5 border text-right font-semibold">Rp {{ o.act_cost|rupiah }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="3" class="p-2 text-center text-slate-400 border">Tidak ada overhead.</td></tr>
-                {% endfor %}
-            </tbody>
-            <tfoot class="bg-slate-50 font-bold">
-                <tr>
-                    <td class="p-1.5 border text-right">Subtotal Overhead:</td>
-                    <td class="p-1.5 border text-right">Rp {{ project.total_est_overhead|rupiah }}</td>
-                    <td class="p-1.5 border text-right">Rp {{ project.total_act_overhead|rupiah }}</td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-
-    <!-- Signature / Approval footer -->
-    <div class="mt-12 grid grid-cols-2 text-center text-xs pt-4 border-t">
-        <div>
-            <p>Dibuat Oleh,</p>
-            <div class="h-16"></div>
-            <p class="font-bold underline">( Estimator / PM )</p>
-        </div>
-        <div>
-            <p>Disetujui Oleh,</p>
-            <div class="h-16"></div>
-            <p class="font-bold underline">( Manajemen / Direksi )</p>
-        </div>
-    </div>
 </body>
 </html>
+

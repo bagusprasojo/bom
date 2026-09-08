@@ -1,110 +1,393 @@
-﻿{% extends "hpp/base.html" %}
+{% extends "hpp/base.html" %}
 {% load custom_filters %}
 
-{% block title %}Realisasi Project - HPP & Manufaktur{% endblock %}
+{% block title %}Monitoring Realisasi Project - HPP & Manufaktur{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+
+    <!-- Top Header & Actions -->
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
             <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
-                <span>Project & HPP</span>
+                <a href="{% url 'project_list' %}" class="hover:text-indigo-600">Project & HPP</a>
                 <span>&rsaquo;</span>
-                <span>Realisasi Project</span>
+                <span class="text-slate-600 font-semibold">Realisasi Project</span>
             </div>
-            <h1 class="text-2xl font-bold text-slate-900">Realisasi Project & Pengeluaran Aktual</h1>
-            <p class="text-sm text-slate-500">Pencatatan realisasi pemakaian material, tenaga kerja, barang jadi, dan overhead bertahap per tanggal.</p>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight">Realisasi Project & Kontrol Anggaran</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Monitoring penyerapan anggaran riil lapangan, deteksi pembengkakan biaya, dan kontrol margin laba kotor.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5">
+            <a href="{% url 'project_realization_export_excel' %}?q={{ query }}&status={{ selected_status }}&budget_status={{ selected_budget_status }}" 
+               class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Download Excel Rekap</span>
+            </a>
+            <a href="{% url 'project_create' %}" 
+               class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>+ Buat Project Baru</span>
+            </a>
         </div>
     </div>
 
-    <!-- Filter Bar -->
+    <!-- Alert Messages jika ada -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-lg text-xs font-semibold {% if message.tags == 'error' %}bg-rose-100 text-rose-800 border border-rose-200{% else %}bg-emerald-100 text-emerald-800 border border-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- 4 Kartu KPI Metrik Finansial Global -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- 1. Total Burned Cost -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Realisasi Biaya</span>
+                <span class="p-2 rounded-lg bg-cyan-50 text-cyan-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                </span>
+            </div>
+            <div class="mt-2">
+                <span class="text-xl font-black text-slate-900 font-mono block">Rp {{ total_burned_cost|rupiah }}</span>
+                <span class="text-[11px] text-slate-500 mt-1 block">Dari pagu rencana <strong class="text-slate-700">Rp {{ total_budget_plan|rupiah }}</strong></span>
+            </div>
+        </div>
+
+        <!-- 2. Proyek On Budget / Hemat -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">On Budget / Hemat</span>
+                <span class="p-2 rounded-lg bg-emerald-50 text-emerald-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </span>
+            </div>
+            <div class="mt-2">
+                <span class="text-xl font-black text-emerald-700 font-mono block">{{ on_budget_count }} <span class="text-xs font-normal text-slate-500">Project</span></span>
+                <span class="text-[11px] text-slate-500 mt-1 block">Biaya aktual dalam koridor aman</span>
+            </div>
+        </div>
+
+        <!-- 3. Peringatan Over Budget -->
+        <div class="p-4 rounded-xl border shadow-sm relative overflow-hidden {% if over_budget_count > 0 %}bg-rose-50/70 border-rose-200{% else %}bg-white border-slate-200{% endif %}">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider {% if over_budget_count > 0 %}text-rose-700{% else %}text-slate-400{% endif %}">
+                    ⚠️ Over Budget
+                </span>
+                <span class="p-2 rounded-lg {% if over_budget_count > 0 %}bg-rose-100 text-rose-700{% else %}bg-slate-50 text-slate-400{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </span>
+            </div>
+            <div class="mt-2">
+                <span class="text-xl font-black {% if over_budget_count > 0 %}text-rose-800{% else %}text-slate-800{% endif %} font-mono block">
+                    {{ over_budget_count }} <span class="text-xs font-normal text-slate-500">Project</span>
+                </span>
+                <span class="text-[11px] {% if over_budget_count > 0 %}text-rose-700 font-semibold{% else %}text-slate-500{% endif %} mt-1 block">
+                    {% if over_budget_count > 0 %}Memerlukan tindakan audit biaya!{% else %}Tidak ada pembengkakan biaya{% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- 4. Rata-rata Margin Riil -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Rata-rata Margin Riil</span>
+                <span class="p-2 rounded-lg bg-indigo-50 text-indigo-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                </span>
+            </div>
+            <div class="mt-2">
+                <span class="text-xl font-black {% if overall_act_margin < 0 %}text-rose-700{% else %}text-indigo-900{% endif %} font-mono block">
+                    {{ overall_act_margin|rupiah }}%
+                </span>
+                <span class="text-[11px] text-slate-500 mt-1 block">Profitabilitas portofolio berjalan</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Filter Tabs / Pills -->
+    <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+        <a href="?q={{ query }}&status={{ selected_status }}&budget_status=all" 
+           class="px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5
+           {% if selected_budget_status == 'all' or not selected_budget_status %}
+               bg-slate-900 text-white shadow-sm
+           {% else %}
+               bg-white text-slate-600 hover:bg-slate-100 border border-slate-200
+           {% endif %}">
+            <span>Semua Project</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] {% if selected_budget_status == 'all' or not selected_budget_status %}bg-slate-700 text-white{% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ total_projects_count }}
+            </span>
+        </a>
+
+        <a href="?q={{ query }}&status={{ selected_status }}&budget_status=over_budget" 
+           class="px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5
+           {% if selected_budget_status == 'over_budget' %}
+               bg-rose-700 text-white shadow-sm
+           {% else %}
+               bg-white text-rose-700 hover:bg-rose-50 border border-rose-200
+           {% endif %}">
+            <span>⚠️ Over Budget</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] {% if selected_budget_status == 'over_budget' %}bg-rose-900 text-white{% else %}bg-rose-100 text-rose-800{% endif %}">
+                {{ over_budget_count }}
+            </span>
+        </a>
+
+        <a href="?q={{ query }}&status={{ selected_status }}&budget_status=on_budget" 
+           class="px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5
+           {% if selected_budget_status == 'on_budget' %}
+               bg-emerald-700 text-white shadow-sm
+           {% else %}
+               bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200
+           {% endif %}">
+            <span>✅ On Budget / Hemat</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] {% if selected_budget_status == 'on_budget' %}bg-emerald-900 text-white{% else %}bg-emerald-100 text-emerald-800{% endif %}">
+                {{ on_budget_count }}
+            </span>
+        </a>
+
+        <a href="?q={{ query }}&status={{ selected_status }}&budget_status=no_realization" 
+           class="px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5
+           {% if selected_budget_status == 'no_realization' %}
+               bg-slate-700 text-white shadow-sm
+           {% else %}
+               bg-white text-slate-600 hover:bg-slate-100 border border-slate-200
+           {% endif %}">
+            <span>Belum Ada Realisasi</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] {% if selected_budget_status == 'no_realization' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ no_realization_count }}
+            </span>
+        </a>
+    </div>
+
+    <!-- Filter Bar Card -->
     <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <form method="GET" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Pencarian Project</label>
-                <input type="text" name="q" value="{{ query }}" placeholder="Kode, nama project, klien..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Cari Project / Customer</label>
+                <input type="text" name="q" value="{{ query }}" placeholder="Kode, nama project, customer..." 
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
             </div>
             <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Status Project</label>
-                <select name="status" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-                    <option value="">-- Semua Status --</option>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Status Workflow</label>
+                <select name="status" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                    <option value="">-- Semua Status Workflow --</option>
                     {% for code, label in status_choices %}
                     <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Status Anggaran Finansial</label>
+                <select name="budget_status" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                    <option value="all" {% if selected_budget_status == 'all' or not selected_budget_status %}selected{% endif %}>-- Semua Status Anggaran --</option>
+                    <option value="over_budget" {% if selected_budget_status == 'over_budget' %}selected{% endif %}>⚠️ Over Budget (Biaya > Anggaran)</option>
+                    <option value="on_budget" {% if selected_budget_status == 'on_budget' %}selected{% endif %}>✅ On Budget / Hemat (Biaya <= Anggaran)</option>
+                    <option value="no_realization" {% if selected_budget_status == 'no_realization' %}selected{% endif %}>⚪ Belum Ada Realisasi (Biaya = 0)</option>
+                </select>
+            </div>
             <div class="flex items-end gap-2">
-                <button type="submit" class="w-full px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-md hover:bg-slate-700">Filter</button>
-                <a href="{% url 'project_realization_list' %}" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-200">Reset</a>
+                <button type="submit" class="flex-1 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm transition">
+                    Terapkan Filter
+                </button>
+                <a href="{% url 'project_realization_list' %}" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition">
+                    Reset
+                </a>
             </div>
         </form>
     </div>
 
-    <!-- Table Realisasi List -->
+    <!-- Table Project Realization List -->
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
-            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
-                <tr>
-                    <th class="px-4 py-3">Kode & Nama Project</th>
-                    <th class="px-4 py-3">Customer</th>
-                    <th class="px-4 py-3 text-center">Status</th>
-                    <th class="px-4 py-3 text-right">Nilai Kontrak</th>
-                    <th class="px-4 py-3 text-right">Est. HPP</th>
-                    <th class="px-4 py-3 text-right">Real. HPP</th>
-                    <th class="px-4 py-3 text-right">Real. Margin</th>
-                    <th class="px-4 py-3 text-center">Aksi</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                {% for p in projects %}
-                <tr class="hover:bg-slate-50">
-                    <td class="px-4 py-3">
-                        <a href="{% url 'project_realization_detail' p.uuid %}" class="font-bold text-cyan-700 hover:underline block">
-                            {{ p.name }}
-                        </a>
-                        <span class="text-xs font-mono text-slate-400">#{{ p.code }}</span>
-                    </td>
-                    <td class="px-4 py-3 text-slate-700 font-medium">
-                        {{ p.customer_name|default:"-" }}
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold
-                            {% if p.status == 'completed' %}bg-emerald-100 text-emerald-800
-                            {% elif p.status == 'in_progress' %}bg-blue-100 text-blue-800
-                            {% elif p.status == 'cancelled' %}bg-red-100 text-red-800
-                            {% else %}bg-slate-100 text-slate-800{% endif %}">
-                            {{ p.get_status_display }}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-right font-bold text-slate-800 font-mono">
-                        {{ p.contract_value|rupiah }}
-                    </td>
-                    <td class="px-4 py-3 text-right text-slate-600 font-mono">
-                        {{ p.total_hpp_estimated|rupiah }}
-                    </td>
-                    <td class="px-4 py-3 text-right font-bold text-cyan-700 font-mono">
-                        {{ p.total_hpp_actual|rupiah }}
-                    </td>
-                    <td class="px-4 py-3 text-right font-bold font-mono {% if p.act_gross_profit < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
-                        {{ p.act_margin_pct|rupiah }}%
-                    </td>
-                    <td class="px-4 py-3 text-center whitespace-nowrap">
-                        <a href="{% url 'project_realization_detail' p.uuid %}" class="inline-flex items-center gap-1 text-xs bg-cyan-600 text-white px-3 py-1.5 rounded-md hover:bg-cyan-700 font-semibold shadow-sm">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                            <span>Input Realisasi</span>
-                        </a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="8" class="px-4 py-8 text-center text-slate-400">
-                        Tidak ada data project.
-                    </td>
-                </tr>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                        <th class="px-4 py-3 text-left">Kode & Nama Project</th>
+                        <th class="px-4 py-3 text-center w-28">Status</th>
+                        <th class="px-4 py-3 text-right">Nilai Kontrak</th>
+                        <th class="px-4 py-3 text-right">Anggaran (Est)</th>
+                        <th class="px-4 py-3 text-right">Realisasi (Aktual)</th>
+                        <th class="px-4 py-3 text-left w-48">Penyerapan Anggaran</th>
+                        <th class="px-4 py-3 text-right">Deviasi (Selisih)</th>
+                        <th class="px-4 py-3 text-center">Status Biaya</th>
+                        <th class="px-4 py-3 text-right">Margin Riil</th>
+                        <th class="px-4 py-3 text-center w-36">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for p in projects %}
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <!-- Kode & Nama Project -->
+                        <td class="px-4 py-3">
+                            <a href="{% url 'project_realization_detail' p.uuid %}" class="font-bold text-cyan-800 hover:text-cyan-950 hover:underline block text-sm">
+                                {{ p.name }}
+                            </a>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                <span class="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">#{{ p.code }}</span>
+                                <span class="text-slate-500 font-medium text-[11px]">&bull; {{ p.customer_name|default:"Tanpa Customer" }}</span>
+                            </div>
+                        </td>
+
+                        <!-- Status Workflow -->
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase
+                                {% if p.status == 'completed' %}bg-emerald-100 text-emerald-800
+                                {% elif p.status == 'in_progress' %}bg-blue-100 text-blue-800
+                                {% elif p.status == 'cancelled' %}bg-rose-100 text-rose-800
+                                {% else %}bg-slate-100 text-slate-700{% endif %}">
+                                {{ p.get_status_display }}
+                            </span>
+                        </td>
+
+                        <!-- Nilai Kontrak -->
+                        <td class="px-4 py-3 text-right font-mono font-semibold text-slate-800 whitespace-nowrap">
+                            Rp {{ p.contract_value|rupiah }}
+                        </td>
+
+                        <!-- Anggaran (Est) -->
+                        <td class="px-4 py-3 text-right font-mono text-slate-600 whitespace-nowrap">
+                            Rp {{ p.calc_est_hpp|rupiah }}
+                        </td>
+
+                        <!-- Realisasi (Aktual) -->
+                        <td class="px-4 py-3 text-right font-mono font-bold whitespace-nowrap
+                            {% if p.calc_budget_status == 'over_budget' %}text-rose-700{% else %}text-slate-900{% endif %}">
+                            Rp {{ p.calc_act_hpp|rupiah }}
+                        </td>
+
+                        <!-- Budget Burn Progress Bar -->
+                        <td class="px-4 py-3">
+                            <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                                <div class="h-2 rounded-full transition-all duration-300
+                                    {% if p.calc_burn_pct > 100 %}bg-rose-600
+                                    {% elif p.calc_burn_pct >= 80 %}bg-amber-500
+                                    {% elif p.calc_burn_pct > 0 %}bg-emerald-500
+                                    {% else %}bg-slate-300{% endif %}"
+                                    style="width: {% if p.calc_burn_pct > 100 %}100{% else %}{{ p.calc_burn_pct }}{% endif %}%;">
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center text-[10px] mt-1 font-mono">
+                                <span class="font-bold {% if p.calc_burn_pct > 100 %}text-rose-600{% elif p.calc_burn_pct >= 80 %}text-amber-600{% else %}text-slate-600{% endif %}">
+                                    {{ p.calc_burn_pct }}%
+                                </span>
+                                <span class="text-slate-400">
+                                    {% if p.calc_remaining >= 0 %}
+                                        Sisa: Rp {{ p.calc_remaining|rupiah }}
+                                    {% else %}
+                                        Over: Rp {{ p.calc_diff|rupiah }}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </td>
+
+                        <!-- Deviasi (Selisih) -->
+                        <td class="px-4 py-3 text-right font-mono font-bold whitespace-nowrap
+                            {% if p.calc_diff > 0 %}text-rose-600{% elif p.calc_diff < 0 %}text-emerald-600{% else %}text-slate-400{% endif %}">
+                            {% if p.calc_diff > 0 %}+{% endif %}Rp {{ p.calc_diff|rupiah }}
+                        </td>
+
+                        <!-- Status Biaya Badge -->
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            {% if p.calc_budget_status == 'over_budget' %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                    OVER BUDGET
+                                </span>
+                            {% elif p.calc_budget_status == 'on_budget' %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    HEMAT
+                                </span>
+                            {% else %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                                    BELUM ADA
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Margin Riil -->
+                        <td class="px-4 py-3 text-right font-mono font-bold whitespace-nowrap
+                            {% if p.act_gross_profit < 0 %}text-rose-600{% else %}text-emerald-700{% endif %}">
+                            {{ p.act_margin_pct|rupiah }}%
+                        </td>
+
+                        <!-- Aksi Dropdown / Button -->
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <a href="{% url 'project_realization_detail' p.uuid %}" 
+                                   class="inline-flex items-center gap-1 text-[11px] bg-cyan-700 text-white px-2.5 py-1.5 rounded-lg hover:bg-cyan-800 font-bold shadow-sm transition"
+                                   title="Buka Halaman Input Realisasi">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                    <span>Input Realisasi</span>
+                                </a>
+
+                                <a href="{% url 'print_project_pdf' p.uuid %}" target="_blank"
+                                   class="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition"
+                                   title="Cetak Laporan / PDF">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                                </a>
+
+                                <a href="{% url 'export_project_excel' p.uuid %}"
+                                   class="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 transition"
+                                   title="Export Excel Project">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="px-4 py-12 text-center text-slate-400">
+                            <div class="max-w-sm mx-auto">
+                                <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <p class="text-sm font-bold text-slate-700">Tidak ada data project yang sesuai</p>
+                                <p class="text-xs text-slate-400 mt-1">Coba sesuaikan kata kunci pencarian atau ganti status filter anggaran Anda.</p>
+                                <a href="{% url 'project_realization_list' %}" class="inline-block mt-3 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200">Reset Semua Filter</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        {% if projects.has_other_pages %}
+        <div class="p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <span class="text-slate-500">
+                Menampilkan halaman <strong class="text-slate-700">{{ projects.number }}</strong> dari <strong class="text-slate-700">{{ projects.paginator.num_pages }}</strong> (Total {{ projects.paginator.count }} Project)
+            </span>
+            <div class="flex items-center gap-1.5">
+                {% if projects.has_previous %}
+                <a href="?page={{ projects.previous_page_number }}&q={{ query }}&status={{ selected_status }}&budget_status={{ selected_budget_status }}" 
+                   class="px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 font-semibold transition">
+                    &laquo; Sebelumnya
+                </a>
+                {% endif %}
+
+                {% for num in projects.paginator.page_range %}
+                    {% if projects.number == num %}
+                    <span class="px-3 py-1.5 bg-cyan-700 text-white rounded-lg font-bold">{{ num }}</span>
+                    {% elif num > projects.number|add:'-3' and num < projects.number|add:'3' %}
+                    <a href="?page={{ num }}&q={{ query }}&status={{ selected_status }}&budget_status={{ selected_budget_status }}" 
+                       class="px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 font-semibold transition">{{ num }}</a>
+                    {% endif %}
                 {% endfor %}
-            </tbody>
-        </table>
+
+                {% if projects.has_next %}
+                <a href="?page={{ projects.next_page_number }}&q={{ query }}&status={{ selected_status }}&budget_status={{ selected_budget_status }}" 
+                   class="px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 font-semibold transition">
+                    Selanjutnya &raquo;
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
+
 </div>
 {% endblock %}
+

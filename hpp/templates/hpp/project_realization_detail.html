@@ -29,14 +29,29 @@
             <p class="text-xs text-slate-500 mt-1">Customer: <strong class="text-slate-700">{{ project.customer_name|default:"-" }}</strong> | Kode: <span class="font-mono text-indigo-600 font-bold">#{{ project.code }}</span></p>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             <a href="{% url 'project_detail' project.uuid %}" class="px-3.5 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition flex items-center gap-1.5 shadow-sm">
                 <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                 <span>Lihat Estimasi HPP / BOM</span>
             </a>
+            {% if project.status == 'completed' %}
+            <a href="{% url 'project_closing_bap' project.uuid %}" target="_blank" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Cetak BAP Resmi</span>
+            </a>
+            {% else %}
+            <a href="{% url 'project_detail' project.uuid %}" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>Closing Proyek</span>
+            </a>
+            {% endif %}
             <a href="{% url 'export_project_excel' project.uuid %}" class="px-3.5 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 <span>Export Excel</span>
+            </a>
+            <a href="{% url 'print_project_pdf' project.uuid %}" target="_blank" class="px-3.5 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-900 transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <span>Cetak / PDF</span>
             </a>
         </div>
     </div>
@@ -49,6 +64,44 @@
             {{ message }}
         </div>
         {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Banner Status Terkunci (Locked State) jika Proyek Selesai -->
+    {% if project.status == 'completed' %}
+    <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+        <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center text-lg font-bold border border-amber-300 shadow-sm shrink-0">
+                🔒
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-black text-amber-950 uppercase tracking-wide">Realisasi Proyek Terkunci (Proyek Selesai)</h3>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
+                        {{ project.completed_date|date:"d M Y"|default:project.updated_at|date:"d M Y" }}
+                    </span>
+                    {% if project.stock_released %}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                        Hasil Produksi Masuk Gudang
+                    </span>
+                    {% endif %}
+                </div>
+                <p class="text-xs text-amber-800 mt-0.5">
+                    Proyek ini telah ditutup. Seluruh pencatatan realisasi baru atau penghapusan riwayat realisasi telah dinonaktifkan untuk integritas pembukuan dan audit.
+                    {% if project.closing_notes %}<span class="italic">"{{ project.closing_notes }}"</span>{% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+            <a href="{% url 'project_closing_bap' project.uuid %}" target="_blank" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Cetak BAP Resmi</span>
+            </a>
+            <a href="{% url 'project_detail' project.uuid %}" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                <span>Kelola Status di Detail</span>
+            </a>
+        </div>
     </div>
     {% endif %}
 
@@ -118,10 +171,16 @@
                 <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Realisasi Pengeluaran Material</h2>
                 <p class="text-xs text-slate-500">Pencatatan aktual bahan baku. Jika terhubung master bahan baku, mutasi stok OUT otomatis dicatat.</p>
             </div>
+            {% if project.status != 'completed' %}
             <button @click="$dispatch('open-material-modal')" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>+ Catat Realisasi Material</span>
             </button>
+            {% else %}
+            <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200 flex items-center gap-1">
+                <span>🔒 Terkunci (Proyek Selesai)</span>
+            </span>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -165,7 +224,11 @@
                         <td class="px-4 py-2.5 text-right font-mono font-bold text-cyan-800">{{ r.total_cost|rupiah }}</td>
                         <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
                         <td class="px-4 py-2.5 text-center whitespace-nowrap">
+                            {% if project.status != 'completed' %}
                             <a href="{% url 'realization_bom_delete' r.uuid %}" onclick="return confirm('Hapus log realisasi material ini? Stok gudang akan dikembalikan.');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Hapus</a>
+                            {% else %}
+                            <span class="text-slate-400 text-xs italic">🔒 Terkunci</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -194,10 +257,16 @@
                 <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Realisasi Biaya Tenaga Kerja</h2>
                 <p class="text-xs text-slate-500">Pencatatan jam kerja atau borongan aktual pekerja lapangan.</p>
             </div>
+            {% if project.status != 'completed' %}
             <button @click="$dispatch('open-labor-modal')" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>+ Catat Realisasi Tenaga Kerja</span>
             </button>
+            {% else %}
+            <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200 flex items-center gap-1">
+                <span>🔒 Terkunci (Proyek Selesai)</span>
+            </span>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -236,7 +305,11 @@
                         <td class="px-4 py-2.5 text-right font-mono font-bold text-cyan-800">{{ r.total_cost|rupiah }}</td>
                         <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
                         <td class="px-4 py-2.5 text-center whitespace-nowrap">
+                            {% if project.status != 'completed' %}
                             <a href="{% url 'realization_labor_delete' r.uuid %}" onclick="return confirm('Hapus log realisasi tenaga kerja ini?');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Hapus</a>
+                            {% else %}
+                            <span class="text-slate-400 text-xs italic">🔒 Terkunci</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -265,10 +338,16 @@
                 <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Pemakaian Barang Jadi (Auto-Stock OUT)</h2>
                 <p class="text-xs text-slate-500">Setiap log yang disimpan di bawah otomatis memotong stok on-hand dan tercatat di kartu stock.</p>
             </div>
+            {% if project.status != 'completed' %}
             <button @click="$dispatch('open-fg-modal')" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>+ Catat Pemakaian Barang Jadi</span>
             </button>
+            {% else %}
+            <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200 flex items-center gap-1">
+                <span>🔒 Terkunci (Proyek Selesai)</span>
+            </span>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -305,7 +384,11 @@
                         </td>
                         <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
                         <td class="px-4 py-2.5 text-center whitespace-nowrap">
+                            {% if project.status != 'completed' %}
                             <a href="{% url 'realization_fg_delete' r.uuid %}" onclick="return confirm('Batalkan log ini? Stok akan dikembalikan (Rollback IN).');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Batal / Kembalikan Stok</a>
+                            {% else %}
+                            <span class="text-slate-400 text-xs italic">🔒 Terkunci</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -334,10 +417,16 @@
                 <h2 class="text-sm font-black text-slate-800 uppercase tracking-wide">Riwayat Pengeluaran Biaya Overhead</h2>
                 <p class="text-xs text-slate-500">Biaya operasional lapangan, sewa mesin, transport, maklon, dan konsumsi.</p>
             </div>
+            {% if project.status != 'completed' %}
             <button @click="$dispatch('open-overhead-modal')" class="bg-cyan-600 hover:bg-cyan-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>+ Catat Biaya Overhead</span>
             </button>
+            {% else %}
+            <span class="px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs font-medium border border-slate-200 flex items-center gap-1">
+                <span>🔒 Terkunci (Proyek Selesai)</span>
+            </span>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -367,7 +456,11 @@
                         <td class="px-4 py-2.5 text-right font-mono font-bold text-cyan-800">{{ r.cost|rupiah }}</td>
                         <td class="px-4 py-2.5 text-slate-500">{{ r.notes|default:"-" }}</td>
                         <td class="px-4 py-2.5 text-center whitespace-nowrap">
+                            {% if project.status != 'completed' %}
                             <a href="{% url 'realization_overhead_delete' r.uuid %}" onclick="return confirm('Hapus log realisasi overhead ini?');" class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]">Hapus</a>
+                            {% else %}
+                            <span class="text-slate-400 text-xs italic">🔒 Terkunci</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

@@ -1,4 +1,5 @@
 from django.db import models, transaction
+from django.apps import apps
 from decimal import Decimal
 import uuid
 
@@ -174,6 +175,8 @@ class Project(models.Model):
     stock_released = models.BooleanField(default=False)
     start_date = models.DateField(null=True, blank=True)
     target_date = models.DateField(null=True, blank=True)
+    completed_date = models.DateField(null=True, blank=True)
+    closing_notes = models.TextField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -263,8 +266,90 @@ class Project(models.Model):
             return (self.act_gross_profit / self.contract_value) * Decimal(100)
         return Decimal(0)
 
-    def release_stock_if_completed(self):
-        pass
+    @property
+    def has_realizations(self):
+        """
+        Mengecek apakah proyek sudah memiliki pencatatan transaksi riil / mutasi persediaan.
+        """
+        return (
+            self.bom_realizations.exists() or
+            self.labor_realizations.exists() or
+            self.finished_good_realizations.exists() or
+            self.overhead_realizations.exists() or
+            self.stock_mutations.exists()
+        )
+
+    def release_stock_if_completed(self, fg=None, qty=0, notes=""):
+        """
+        Jika closing proyek menghasilkan barang jadi untuk disimpan ke gudang persediaan,
+        tambahkan kuantitas ke FinishedGood.current_stock dan catat FinishedGoodStockMutation bertipe 'IN'.
+        """
+        if self.status != "completed" or self.stock_released:
+            return None
+        
+        if fg and Decimal(qty or 0) > 0:
+            with transaction.atomic():
+                fg.current_stock += Decimal(qty)
+                fg.save(update_fields=["current_stock"])
+
+                FinishedGoodStockMutation = apps.get_model("hpp", "FinishedGoodStockMutation")
+                mutation = FinishedGoodStockMutation.objects.create(
+                    finished_good=fg,
+                    project=self,
+                    mutation_type="IN",
+                    quantity=Decimal(qty),
+                    balance_after=fg.current_stock,
+                    reference_no=f"PROD-{self.code}",
+                    notes=f"Hasil produksi closing project {self.code} ({self.name}) - {notes}".strip()
+                )
+                self.stock_released = True
+                self.save(update_fields=["stock_released"])
+                return mutation
+        return None
+
+    def revert_stock_release(self):
+        """
+        Rollback penambahan stok barang jadi jika proyek yang sudah selesai dibuka kembali (Reopen).
+        Menghitung selisih bersih (net unreverted) agar aman dari multiple close/reopen cycle.
+        """
+        with transaction.atomic():
+            FinishedGoodStockMutation = apps.get_model("hpp", "FinishedGoodStockMutation")
+            in_mutations = FinishedGoodStockMutation.objects.filter(
+                project=self,
+                reference_no__startswith=f"PROD-{self.code}",
+                mutation_type="IN"
+            )
+            out_mutations = FinishedGoodStockMutation.objects.filter(
+                project=self,
+                reference_no__startswith=f"CANCEL-PROD-{self.code}",
+                mutation_type="OUT"
+            )
+
+            total_by_fg = {}
+            for m in in_mutations:
+                total_by_fg[m.finished_good_id] = total_by_fg.get(m.finished_good_id, Decimal(0)) + m.quantity
+            for m in out_mutations:
+                total_by_fg[m.finished_good_id] = total_by_fg.get(m.finished_good_id, Decimal(0)) - m.quantity
+
+            FinishedGood = apps.get_model("hpp", "FinishedGood")
+            for fg_id, net_qty in total_by_fg.items():
+                if net_qty > Decimal(0):
+                    fg = FinishedGood.objects.get(id=fg_id)
+                    fg.current_stock -= net_qty
+                    fg.save(update_fields=["current_stock"])
+
+                    FinishedGoodStockMutation.objects.create(
+                        finished_good=fg,
+                        project=self,
+                        mutation_type="OUT",
+                        quantity=net_qty,
+                        balance_after=fg.current_stock,
+                        reference_no=f"CANCEL-PROD-{self.code}",
+                        notes=f"Rollback hasil produksi karena pembukaan kembali project {self.code}"
+                    )
+            
+            self.stock_released = False
+            self.save(update_fields=["stock_released"])
 
 
 class BOMItem(models.Model):

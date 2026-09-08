@@ -2,8 +2,15 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Q
+from django.core.paginator import Paginator
+from django.http import HttpResponse
+from datetime import datetime
 from decimal import Decimal
 import json
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
 from .models import (
     UnitMaster,
     Project, BOMItem, ProjectLabor, ProjectOverhead, FinishedGood,
@@ -39,19 +46,288 @@ def _clean_decimal(val_str, default=Decimal(0)):
 def project_realization_list(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
+    budget_status = request.GET.get("budget_status", "all").strip()
+    page_num = request.GET.get("page", 1)
 
-    projects = Project.objects.all().order_by("-created_at")
+    projects_qs = Project.objects.all().order_by("-created_at")
     if query:
-        projects = projects.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(customer_name__icontains=query))
+        projects_qs = projects_qs.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(customer_name__icontains=query))
     if status:
-        projects = projects.filter(status=status)
+        projects_qs = projects_qs.filter(status=status)
+
+    all_projects = list(projects_qs)
+    total_projects_count = len(all_projects)
+    total_burned_cost = Decimal(0)
+    total_budget_plan = Decimal(0)
+    total_contract_value = Decimal(0)
+    over_budget_count = 0
+    on_budget_count = 0
+    no_realization_count = 0
+
+    enriched_projects = []
+    for p in all_projects:
+        est_hpp = p.total_hpp_estimated
+        act_hpp = p.total_hpp_actual
+        contract_val = p.contract_value
+        diff = act_hpp - est_hpp
+        remaining = est_hpp - act_hpp
+
+        total_burned_cost += act_hpp
+        total_budget_plan += est_hpp
+        total_contract_value += contract_val
+
+        if est_hpp > 0:
+            burn_pct = (act_hpp / est_hpp) * Decimal(100)
+        else:
+            burn_pct = Decimal(0) if act_hpp == 0 else Decimal(100)
+
+        if act_hpp == 0:
+            b_status = "no_realization"
+            no_realization_count += 1
+        elif act_hpp > est_hpp:
+            b_status = "over_budget"
+            over_budget_count += 1
+        else:
+            b_status = "on_budget"
+            on_budget_count += 1
+
+        p.calc_est_hpp = est_hpp
+        p.calc_act_hpp = act_hpp
+        p.calc_diff = diff
+        p.calc_remaining = remaining
+        p.calc_burn_pct = round(burn_pct, 1)
+        p.calc_budget_status = b_status
+        enriched_projects.append(p)
+
+    # Filter berdasarkan status anggaran
+    if budget_status == "over_budget":
+        filtered_projects = [p for p in enriched_projects if p.calc_budget_status == "over_budget"]
+    elif budget_status == "on_budget":
+        filtered_projects = [p for p in enriched_projects if p.calc_budget_status == "on_budget"]
+    elif budget_status == "no_realization":
+        filtered_projects = [p for p in enriched_projects if p.calc_budget_status == "no_realization"]
+    else:
+        filtered_projects = enriched_projects
+
+    overall_act_margin = Decimal(0)
+    if total_contract_value > 0:
+        overall_act_margin = ((total_contract_value - total_burned_cost) / total_contract_value) * Decimal(100)
+
+    # Paginasi 20 item per halaman
+    paginator = Paginator(filtered_projects, 20)
+    page_obj = paginator.get_page(page_num)
 
     return render(request, "hpp/project_realization_list.html", {
-        "projects": projects,
+        "projects": page_obj,
         "query": query,
         "selected_status": status,
+        "selected_budget_status": budget_status,
         "status_choices": Project.STATUS_CHOICES,
+        "total_projects_count": total_projects_count,
+        "filtered_count": len(filtered_projects),
+        "total_burned_cost": total_burned_cost,
+        "total_budget_plan": total_budget_plan,
+        "over_budget_count": over_budget_count,
+        "on_budget_count": on_budget_count,
+        "no_realization_count": no_realization_count,
+        "overall_act_margin": overall_act_margin,
     })
+
+
+def project_realization_export_excel(request):
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
+    budget_status = request.GET.get("budget_status", "all").strip()
+
+    projects_qs = Project.objects.all().order_by("-created_at")
+    if query:
+        projects_qs = projects_qs.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(customer_name__icontains=query))
+    if status:
+        projects_qs = projects_qs.filter(status=status)
+
+    enriched = []
+    for p in projects_qs:
+        est_hpp = p.total_hpp_estimated
+        act_hpp = p.total_hpp_actual
+        diff = act_hpp - est_hpp
+        remaining = est_hpp - act_hpp
+        burn_pct = (act_hpp / est_hpp * Decimal(100)) if est_hpp > 0 else (Decimal(0) if act_hpp == 0 else Decimal(100))
+        
+        if act_hpp == 0:
+            b_status = "no_realization"
+            status_label = "Belum Ada Realisasi"
+        elif act_hpp > est_hpp:
+            b_status = "over_budget"
+            status_label = "OVER BUDGET"
+        else:
+            b_status = "on_budget"
+            status_label = "ON BUDGET / HEMAT"
+
+        p.calc_est_hpp = est_hpp
+        p.calc_act_hpp = act_hpp
+        p.calc_diff = diff
+        p.calc_remaining = remaining
+        p.calc_burn_pct = burn_pct
+        p.calc_budget_status = b_status
+        p.calc_status_label = status_label
+
+        if budget_status == "over_budget" and b_status != "over_budget":
+            continue
+        if budget_status == "on_budget" and b_status != "on_budget":
+            continue
+        if budget_status == "no_realization" and b_status != "no_realization":
+            continue
+
+        enriched.append(p)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Rekap Realisasi HPP"
+    ws.views.sheetView[0].showGridLines = True
+
+    # Styling
+    font_family = "Calibri"
+    thin_side = Side(border_style="thin", color="CBD5E1")
+    thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    double_bottom_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=Side(border_style="double", color="0F172A"))
+
+    title_font = Font(name=font_family, size=14, bold=True, color="1E1B4B")
+    tbl_header_font = Font(name=font_family, size=10, bold=True, color="FFFFFF")
+    tbl_header_fill = PatternFill(start_color="1E1B4B", end_color="1E1B4B", fill_type="solid")
+    
+    total_font = Font(name=font_family, size=10, bold=True, color="0F172A")
+    total_fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
+
+    currency_fmt = '"Rp" #,##0;("Rp" #,##0);"-"'
+    percent_fmt = '0.00%'
+
+    # Header title
+    ws.append(["REKAPITULASI PENYERAPAN ANGGARAN & REALISASI HPP PROJECT"])
+    ws["A1"].font = title_font
+    ws.append([f"Tanggal Ekspor: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Total Data: {len(enriched)} Project"])
+    ws.append([])
+
+    # Table Header
+    headers = [
+        "No", "Kode Project", "Nama Project", "Customer", "Status Workflow",
+        "Nilai Kontrak", "Anggaran (Est. HPP)", "Realisasi (Aktual HPP)",
+        "Sisa Anggaran", "Deviasi Biaya", "Penyerapan (%)",
+        "Status Anggaran", "Gross Profit (Aktual)", "Margin Aktual (%)"
+    ]
+    ws.append(headers)
+    hdr_row = ws.max_row
+    for c in range(1, len(headers) + 1):
+        cell = ws.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [1, 2, 5, 11, 12] else ("right" if c >= 6 else "left"))
+
+    # Rows
+    tot_contract = Decimal(0)
+    tot_est = Decimal(0)
+    tot_act = Decimal(0)
+    tot_remaining = Decimal(0)
+    tot_diff = Decimal(0)
+    tot_gp = Decimal(0)
+
+    for idx, p in enumerate(enriched, start=1):
+        tot_contract += p.contract_value
+        tot_est += p.calc_est_hpp
+        tot_act += p.calc_act_hpp
+        tot_remaining += p.calc_remaining
+        tot_diff += p.calc_diff
+        tot_gp += p.act_gross_profit
+
+        burn_ratio = float(p.calc_burn_pct) / 100.0
+        margin_ratio = float(p.act_margin_pct) / 100.0
+
+        ws.append([
+            idx,
+            p.code,
+            p.name,
+            p.customer_name or "-",
+            p.get_status_display(),
+            float(p.contract_value),
+            float(p.calc_est_hpp),
+            float(p.calc_act_hpp),
+            float(p.calc_remaining),
+            float(p.calc_diff),
+            burn_ratio,
+            p.calc_status_label,
+            float(p.act_gross_profit),
+            margin_ratio
+        ])
+        curr_row = ws.max_row
+        for c in range(1, len(headers) + 1):
+            cell = ws.cell(row=curr_row, column=c)
+            cell.border = thin_border
+            if c in [6, 7, 8, 9, 10, 13]:
+                cell.number_format = currency_fmt
+                cell.alignment = Alignment(horizontal="right")
+            elif c in [11, 14]:
+                cell.number_format = percent_fmt
+                cell.alignment = Alignment(horizontal="right")
+            elif c in [1, 2, 5, 12]:
+                cell.alignment = Alignment(horizontal="center")
+            
+            # Status colors
+            if c == 12:
+                if p.calc_budget_status == "over_budget":
+                    cell.font = Font(name=font_family, size=9, bold=True, color="B91C1C")
+                    cell.fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+                elif p.calc_budget_status == "on_budget":
+                    cell.font = Font(name=font_family, size=9, bold=True, color="047857")
+                    cell.fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+
+    # Grand Total Row
+    tot_burn_ratio = float(tot_act / tot_est) if tot_est > 0 else 0.0
+    tot_margin_ratio = float(tot_gp / tot_contract) if tot_contract > 0 else 0.0
+    ws.append([
+        "TOTAL", "", "", "", "",
+        float(tot_contract),
+        float(tot_est),
+        float(tot_act),
+        float(tot_remaining),
+        float(tot_diff),
+        tot_burn_ratio,
+        "",
+        float(tot_gp),
+        tot_margin_ratio
+    ])
+    tot_row = ws.max_row
+    for c in range(1, len(headers) + 1):
+        cell = ws.cell(row=tot_row, column=c)
+        cell.font = total_font
+        cell.fill = total_fill
+        cell.border = double_bottom_border
+        if c in [6, 7, 8, 9, 10, 13]:
+            cell.number_format = currency_fmt
+            cell.alignment = Alignment(horizontal="right")
+        elif c in [11, 14]:
+            cell.number_format = percent_fmt
+            cell.alignment = Alignment(horizontal="right")
+        elif c == 1:
+            cell.alignment = Alignment(horizontal="center")
+
+    # Autofit
+    for col in ws.columns:
+        col_letter = get_column_letter(col[0].column)
+        max_len = 0
+        for cell in col:
+            if cell.value is not None:
+                val_str = str(cell.value)
+                if "\n" in val_str:
+                    val_str = max(val_str.split("\n"), key=len)
+                if len(val_str) > max_len:
+                    max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 46)
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    filename = f"Rekap_Realisasi_Project_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
 
 
 def project_realization_detail(request, uuid):
@@ -185,6 +461,10 @@ def project_realization_detail(request, uuid):
 def realization_bom_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mencatat realisasi material.")
+            return redirect("project_realization_detail", uuid=project.uuid)
+
         bom_item_uuid = request.POST.get("bom_item_uuid", "").strip()
         raw_material_uuid = request.POST.get("raw_material_uuid", "").strip()
         date = request.POST.get("date")
@@ -246,6 +526,10 @@ def realization_bom_add(request, project_uuid):
 def realization_bom_delete(request, uuid):
     realization = get_object_or_404(BOMItemRealization, uuid=uuid)
     project_uuid = realization.project.uuid
+    if realization.project.status == "completed":
+        messages.error(request, f"Proyek '{realization.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menghapus log realisasi.")
+        return redirect("project_realization_detail", uuid=project_uuid)
+
     item_name = realization.item_name
     realization.delete()
     messages.success(request, f"Log realisasi material '{item_name}' berhasil dibatalkan dan stok dikembalikan.")
@@ -256,6 +540,10 @@ def realization_bom_delete(request, uuid):
 def realization_labor_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mencatat realisasi tenaga kerja.")
+            return redirect("project_realization_detail", uuid=project.uuid)
+
         labor_item_uuid = request.POST.get("labor_item_uuid", "").strip()
         date = request.POST.get("date")
         role_name = request.POST.get("role_name", "").strip()
@@ -301,6 +589,10 @@ def realization_labor_add(request, project_uuid):
 def realization_labor_delete(request, uuid):
     realization = get_object_or_404(LaborRealization, uuid=uuid)
     project_uuid = realization.project.uuid
+    if realization.project.status == "completed":
+        messages.error(request, f"Proyek '{realization.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menghapus log realisasi.")
+        return redirect("project_realization_detail", uuid=project_uuid)
+
     role_name = realization.role_name
     realization.delete()
     messages.success(request, f"Log realisasi tenaga kerja '{role_name}' berhasil dihapus.")
@@ -311,6 +603,10 @@ def realization_labor_delete(request, uuid):
 def realization_fg_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mencatat realisasi barang jadi.")
+            return redirect("project_realization_detail", uuid=project.uuid)
+
         project_fg_uuid = request.POST.get("project_fg_uuid", "").strip()
         fg_uuid = request.POST.get("fg_uuid", "").strip()
         date = request.POST.get("date")
@@ -361,6 +657,10 @@ def realization_fg_add(request, project_uuid):
 def realization_fg_delete(request, uuid):
     realization = get_object_or_404(FinishedGoodRealization, uuid=uuid)
     project_uuid = realization.project.uuid
+    if realization.project.status == "completed":
+        messages.error(request, f"Proyek '{realization.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menghapus log realisasi.")
+        return redirect("project_realization_detail", uuid=project_uuid)
+
     fg_name = realization.finished_good.name
     realization.delete()
     messages.success(request, f"Log realisasi barang jadi '{fg_name}' dibatalkan dan stock telah dikembalikan.")
@@ -371,6 +671,10 @@ def realization_fg_delete(request, uuid):
 def realization_overhead_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mencatat realisasi overhead.")
+            return redirect("project_realization_detail", uuid=project.uuid)
+
         overhead_item_uuid = request.POST.get("overhead_item_uuid", "").strip()
         date = request.POST.get("date")
         expense_name = request.POST.get("expense_name", "").strip()
@@ -409,6 +713,10 @@ def realization_overhead_add(request, project_uuid):
 def realization_overhead_delete(request, uuid):
     realization = get_object_or_404(OverheadRealization, uuid=uuid)
     project_uuid = realization.project.uuid
+    if realization.project.status == "completed":
+        messages.error(request, f"Proyek '{realization.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menghapus log realisasi.")
+        return redirect("project_realization_detail", uuid=project_uuid)
+
     expense_name = realization.expense_name
     realization.delete()
     messages.success(request, f"Log realisasi overhead '{expense_name}' berhasil dihapus.")

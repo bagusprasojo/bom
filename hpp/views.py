@@ -4,11 +4,13 @@ from django.http import HttpResponse
 from django.db import transaction
 from django.db.models import Q
 from django.contrib import messages
+from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime
 import json
 import openpyxl
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 from .models import (
     UnitMaster,
@@ -280,8 +282,21 @@ def project_detail(request, uuid):
 def project_update(request, uuid):
     project = get_object_or_404(Project, uuid=uuid)
     if request.method == "POST":
-        project.code = request.POST.get("code", project.code)
-        project.name = request.POST.get("name", project.name)
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mengubah informasi proyek.")
+            return redirect("project_detail", uuid=project.uuid)
+
+        new_code = request.POST.get("code", project.code).strip()
+        if new_code and new_code != project.code:
+            if project.has_realizations:
+                messages.warning(
+                    request, 
+                    f"Kode proyek '{project.code}' tidak dapat diubah karena sudah memiliki riwayat mutasi/realisasi operasional."
+                )
+            else:
+                project.code = new_code
+
+        project.name = request.POST.get("name", project.name).strip()
         customer_uuid = request.POST.get("customer_uuid", "").strip()
         if customer_uuid:
             customer = Customer.objects.filter(uuid=customer_uuid).first()
@@ -289,7 +304,7 @@ def project_update(request, uuid):
                 project.customer = customer
                 project.customer_name = str(customer)
         elif "customer_name" in request.POST:
-            project.customer_name = request.POST.get("customer_name", "")
+            project.customer_name = request.POST.get("customer_name", "").strip()
 
         raw_contract = request.POST.get("contract_value", str(project.contract_value)).strip()
         clean_contract = raw_contract.replace("Rp", "").replace("rp", "").replace(" ", "")
@@ -312,17 +327,138 @@ def project_update(request, uuid):
         except (ValueError, TypeError):
             pass
 
-        project.status = request.POST.get("status", project.status)
+        new_status = request.POST.get("status", project.status)
+        if new_status == "completed" and project.status != "completed":
+            messages.warning(
+                request, 
+                "Penutupan status ke 'Selesai (Completed)' harus melalui alur resmi tombol 'Closing Project' untuk rekonsiliasi HPP dan Berita Acara (BAP)."
+            )
+        elif new_status in ["draft", "in_progress", "cancelled"]:
+            project.status = new_status
+
         project.start_date = request.POST.get("start_date") or None
         project.target_date = request.POST.get("target_date") or None
         if "notes" in request.POST:
             project.notes = request.POST.get("notes", "").strip()
         project.save()
         
-        # Cek trigger potong stock jika project selesai
-        project.release_stock_if_completed()
-        messages.success(request, f"Project '{project.name}' berhasil diperbarui.")
+        messages.success(request, f"Informasi project '{project.name}' berhasil diperbarui.")
     return redirect("project_detail", uuid=project.uuid)
+
+
+# =========================================================================
+# PROJECT CLOSING & REOPEN VIEWS
+# =========================================================================
+def project_close(request, uuid):
+    """
+    Eksekusi Penutupan Proyek (Closing Project):
+    - Mengubah status ke 'completed' dan progress ke 100%
+    - Mencatat completed_date dan closing_notes
+    - Mengunci data HPP proyek untuk kepatuhan audit pembukuan
+    - Opsional: Melakukan Stock IN ke persediaan gudang jika proyek menghasilkan Barang Jadi
+    """
+    project = get_object_or_404(Project, uuid=uuid)
+    if request.method == "POST":
+        if project.status == "completed":
+            messages.warning(request, f"Proyek '{project.name}' sudah berstatus Selesai (Closed).")
+            return redirect("project_detail", uuid=project.uuid)
+        
+        date_str = request.POST.get("completed_date")
+        if date_str:
+            try:
+                completed_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                completed_date = timezone.now().date()
+        else:
+            completed_date = timezone.now().date()
+
+        closing_notes = request.POST.get("closing_notes", "").strip()
+        store_finished_good = request.POST.get("store_finished_good") in ["1", "on", "true"]
+
+        with transaction.atomic():
+            project.status = "completed"
+            project.progress_percentage = 100
+            project.completed_date = completed_date
+            project.closing_notes = closing_notes
+            project.save(update_fields=["status", "progress_percentage", "completed_date", "closing_notes", "updated_at"])
+
+            if store_finished_good:
+                fg_uuid = request.POST.get("finished_good_uuid", "").strip()
+                fg_qty = _clean_decimal(request.POST.get("finished_good_qty", "0"))
+                fg_notes = request.POST.get("finished_good_notes", "").strip()
+
+                if fg_uuid and fg_qty > 0:
+                    fg = FinishedGood.objects.filter(uuid=fg_uuid).first()
+                    if fg:
+                        project.release_stock_if_completed(fg=fg, qty=fg_qty, notes=fg_notes)
+                        messages.success(
+                            request,
+                            f"Proyek '{project.name}' ({project.code}) BERHASIL DITUTUP! Stok {fg.name} bertambah +{fg_qty:g} {fg.unit} di gudang."
+                        )
+                    else:
+                        messages.success(request, f"Proyek '{project.name}' ({project.code}) BERHASIL DITUTUP (Status: Selesai, Progress: 100%).")
+                else:
+                    messages.success(request, f"Proyek '{project.name}' ({project.code}) BERHASIL DITUTUP (Status: Selesai, Progress: 100%).")
+            else:
+                messages.success(request, f"Proyek '{project.name}' ({project.code}) BERHASIL DITUTUP (Status: Selesai, Progress: 100%). Seluruh data HPP dikunci untuk audit.")
+
+    return redirect("project_detail", uuid=project.uuid)
+
+
+def project_reopen(request, uuid):
+    """
+    Membuka kembali proyek yang sudah selesai (Reopen Project):
+    - Mengembalikan status ke 'in_progress' dan progress ke 95%
+    - Melakukan rollback penambahan stok barang jadi jika sebelumnya di-release
+    - Mencatat riwayat alasan pembukaan kembali ke notes
+    """
+    project = get_object_or_404(Project, uuid=uuid)
+    if request.method == "POST":
+        if project.status != "completed":
+            messages.warning(request, f"Proyek '{project.name}' belum berstatus Selesai, tidak perlu dibuka kembali.")
+            return redirect("project_detail", uuid=project.uuid)
+
+        reopen_reason = request.POST.get("reopen_reason", "").strip() or "Revisi data HPP dan realisasi lapangan"
+        today_str = timezone.now().strftime("%d/%m/%Y %H:%M")
+
+        with transaction.atomic():
+            # Rollback stok barang jadi jika pernah dirilis
+            if project.stock_released:
+                project.revert_stock_release()
+
+            project.status = "in_progress"
+            project.progress_percentage = 95
+            audit_entry = f"\n[BUKA KEMBALI {today_str}] Alasan: {reopen_reason}"
+            project.notes = (project.notes or "") + audit_entry
+            project.save(update_fields=["status", "progress_percentage", "notes", "updated_at"])
+
+            messages.success(request, f"Proyek '{project.name}' ({project.code}) berhasil dibuka kembali. Anda dapat menambahkan atau mengoreksi data.")
+
+    return redirect("project_detail", uuid=project.uuid)
+
+
+def project_closing_bap(request, uuid):
+    """
+    Mencetak Berita Acara Penyelesaian Proyek (BAP) resmi.
+    """
+    project = get_object_or_404(Project, uuid=uuid)
+    materials = get_ordered_bom(project)
+    labors = project.labor_items.all().select_related("labor_master")
+    overheads = project.overhead_items.all()
+    finished_goods = project.finished_good_items.all().select_related("finished_good")
+
+    # Ambil mutasi stok hasil produksi jika ada
+    prod_mutations = project.stock_mutations.filter(mutation_type="IN", reference_no=f"PROD-{project.code}").select_related("finished_good")
+
+    return render(request, "hpp/project_closing_bap.html", {
+        "project": project,
+        "materials": materials,
+        "labors": labors,
+        "overheads": overheads,
+        "finished_goods": finished_goods,
+        "prod_mutations": prod_mutations,
+        "now": timezone.now(),
+    })
 
 
 # =========================================================================
@@ -331,6 +467,10 @@ def project_update(request, uuid):
 def bom_item_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menambah item BOM.")
+            return redirect("project_detail", uuid=project.uuid)
+
         name = request.POST.get("name", "").strip()
         item_type = request.POST.get("item_type", "material")
         raw_material_uuid = request.POST.get("raw_material_uuid", "").strip()
@@ -398,6 +538,10 @@ def bom_item_add(request, project_uuid):
 def bom_item_update(request, uuid):
     item = get_object_or_404(BOMItem, uuid=uuid)
     if request.method == "POST":
+        if item.project.status == "completed":
+            messages.error(request, f"Proyek '{item.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mengedit item BOM.")
+            return redirect("project_detail", uuid=item.project.uuid)
+
         name = request.POST.get("name", item.name).strip()
         item_type = request.POST.get("item_type", item.item_type)
         raw_material_uuid = request.POST.get("raw_material_uuid", "").strip()
@@ -452,6 +596,10 @@ def bom_item_delete(request, uuid):
     item = get_object_or_404(BOMItem, uuid=uuid)
     project_uuid = item.project.uuid
     if request.method == "POST":
+        if item.project.status == "completed":
+            messages.error(request, f"Proyek '{item.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menghapus item BOM.")
+            return redirect("project_detail", uuid=project_uuid)
+
         if item.children.exists():
             messages.error(request, f"Item '{item.name}' tidak dapat dihapus karena masih memiliki sub-item / komponen di dalamnya. Hapus atau pindahkan sub-item terlebih dahulu.")
             return redirect("project_detail", uuid=project_uuid)
@@ -473,6 +621,10 @@ def bom_item_delete(request, uuid):
 def labor_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menambah data tenaga kerja.")
+            return redirect("project_detail", uuid=project.uuid)
+
         role_name = request.POST.get("role_name", "").strip()
         unit = request.POST.get("unit", "jam").strip()
         est_quantity = _clean_decimal(request.POST.get("est_quantity"), Decimal(1))
@@ -503,6 +655,10 @@ def labor_add(request, project_uuid):
 def labor_update(request, uuid):
     item = get_object_or_404(ProjectLabor, uuid=uuid)
     if request.method == "POST":
+        if item.project.status == "completed":
+            messages.error(request, f"Proyek '{item.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mengedit data tenaga kerja.")
+            return redirect("project_detail", uuid=item.project.uuid)
+
         role_name = request.POST.get("role_name", "").strip()
         if role_name:
             item.role_name = role_name
@@ -521,6 +677,10 @@ def labor_delete(request, uuid):
     item = get_object_or_404(ProjectLabor, uuid=uuid)
     project_uuid = item.project.uuid
     if request.method == "POST":
+        if item.project.status == "completed":
+            messages.error(request, f"Proyek '{item.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menghapus data tenaga kerja.")
+            return redirect("project_detail", uuid=project_uuid)
+
         if item.realizations.exists():
             messages.error(request, f"Tenaga kerja '{item.role_name}' tidak dapat dihapus karena sudah memiliki riwayat realisasi.")
             return redirect("project_detail", uuid=project_uuid)
@@ -537,6 +697,10 @@ def labor_delete(request, uuid):
 def overhead_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menambah biaya overhead.")
+            return redirect("project_detail", uuid=project.uuid)
+
         name = request.POST.get("name", "").strip()
         est_cost = _clean_decimal(request.POST.get("est_cost"), Decimal(0))
         act_cost = _clean_decimal(request.POST.get("act_cost"), Decimal(0))
@@ -561,6 +725,10 @@ def overhead_add(request, project_uuid):
 def overhead_update(request, uuid):
     item = get_object_or_404(ProjectOverhead, uuid=uuid)
     if request.method == "POST":
+        if item.project.status == "completed":
+            messages.error(request, f"Proyek '{item.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mengedit biaya overhead.")
+            return redirect("project_detail", uuid=item.project.uuid)
+
         name = request.POST.get("name", "").strip()
         if name:
             item.name = name
@@ -576,6 +744,10 @@ def overhead_delete(request, uuid):
     item = get_object_or_404(ProjectOverhead, uuid=uuid)
     project_uuid = item.project.uuid
     if request.method == "POST":
+        if item.project.status == "completed":
+            messages.error(request, f"Proyek '{item.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menghapus biaya overhead.")
+            return redirect("project_detail", uuid=project_uuid)
+
         if item.realizations.exists():
             messages.error(request, f"Biaya overhead '{item.name}' tidak dapat dihapus karena sudah memiliki riwayat realisasi.")
             return redirect("project_detail", uuid=project_uuid)
@@ -592,6 +764,10 @@ def overhead_delete(request, uuid):
 def project_fg_add(request, project_uuid):
     project = get_object_or_404(Project, uuid=project_uuid)
     if request.method == "POST":
+        if project.status == "completed":
+            messages.error(request, f"Proyek '{project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menambah barang jadi.")
+            return redirect("project_detail", uuid=project.uuid)
+
         fg_uuid = request.POST.get("finished_good_uuid", "").strip()
         fg = FinishedGood.objects.filter(uuid=fg_uuid).first() if fg_uuid else None
         if not fg:
@@ -636,6 +812,10 @@ def project_fg_add(request, project_uuid):
 def project_fg_update(request, uuid):
     item = get_object_or_404(ProjectFinishedGood, uuid=uuid)
     if request.method == "POST":
+        if item.project.status == "completed":
+            messages.error(request, f"Proyek '{item.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin mengedit barang jadi.")
+            return redirect("project_detail", uuid=item.project.uuid)
+
         fg_uuid = request.POST.get("finished_good_uuid", "").strip()
         if fg_uuid:
             fg = FinishedGood.objects.filter(uuid=fg_uuid).first()
@@ -655,6 +835,10 @@ def project_fg_delete(request, uuid):
     item = get_object_or_404(ProjectFinishedGood, uuid=uuid)
     project_uuid = item.project.uuid
     if request.method == "POST":
+        if item.project.status == "completed":
+            messages.error(request, f"Proyek '{item.project.code}' sudah ditutup dan terkunci. Harap buka kembali proyek jika ingin menghapus barang jadi.")
+            return redirect("project_detail", uuid=project_uuid)
+
         if item.realizations.exists():
             messages.error(request, f"Barang jadi '{item.finished_good.name}' tidak dapat dihapus karena sudah ada riwayat pemakaian riil.")
             return redirect("project_detail", uuid=project_uuid)
@@ -766,129 +950,739 @@ def stock_mutation_create(request, uuid):
 def export_project_excel(request, uuid):
     project = get_object_or_404(Project, uuid=uuid)
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "HPP & BOM"
 
-    bold_font = Font(bold=True)
-    header_fill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
-    sec_fill = PatternFill(start_color="CBD5E1", end_color="CBD5E1", fill_type="solid")
+    # Styling definitions
+    font_family = "Calibri"
+    thin_side = Side(border_style="thin", color="CBD5E1")
+    thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    double_bottom_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=Side(border_style="double", color="0F172A"))
+    
+    title_font = Font(name=font_family, size=14, bold=True, color="1E1B4B")
+    section_title_font = Font(name=font_family, size=11, bold=True, color="FFFFFF")
+    section_title_fill = PatternFill(start_color="1E1B4B", end_color="1E1B4B", fill_type="solid")
+    
+    tbl_header_font = Font(name=font_family, size=10, bold=True, color="1E293B")
+    tbl_header_fill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
+    
+    sub_header_font = Font(name=font_family, size=10, bold=True, color="1E1B4B")
+    sub_header_fill = PatternFill(start_color="EEF2FF", end_color="EEF2FF", fill_type="solid")
 
-    ws.append(["LAPORAN HPP & BOM PROJECT"])
-    ws["A1"].font = Font(size=14, bold=True)
-    ws.append([])
+    total_font = Font(name=font_family, size=10, bold=True, color="0F172A")
+    total_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
 
-    ws.append(["Kode Project", project.code, "Status", project.get_status_display()])
-    ws.append(["Nama Project", project.name, "Progress", f"{project.progress_percentage}%"])
-    ws.append(["Customer", project.customer_name or "-", "Nilai Kontrak", float(project.contract_value)])
-    ws.append([])
+    badge_saving_font = Font(name=font_family, size=9, bold=True, color="047857")
+    badge_saving_fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+    badge_over_font = Font(name=font_family, size=9, bold=True, color="B91C1C")
+    badge_over_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    badge_neutral_font = Font(name=font_family, size=9, bold=True, color="475569")
+    badge_neutral_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+
+    currency_fmt = '"Rp" #,##0;("Rp" #,##0);"-"'
+    percent_fmt = '0.00%'
+    qty_fmt = '#,##0.00'
+
+    def format_row(ws, row_idx, font=None, fill=None, border=None, alignment=None):
+        for col_idx in range(1, ws.max_column + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if font: cell.font = font
+            if fill: cell.fill = fill
+            if border: cell.border = border
+            if alignment: cell.alignment = alignment
+
+    def autofit(ws):
+        for col in ws.columns:
+            col_letter = get_column_letter(col[0].column)
+            max_len = 0
+            for cell in col:
+                if cell.value is not None:
+                    val_str = str(cell.value)
+                    if "\n" in val_str:
+                        val_str = max(val_str.split("\n"), key=len)
+                    if len(val_str) > max_len:
+                        max_len = len(val_str)
+            ws.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 48)
+
+    # -------------------------------------------------------------------------
+    # SHEET 1: RINGKASAN & KPI
+    # -------------------------------------------------------------------------
+    ws_kpi = wb.active
+    ws_kpi.title = "Ringkasan & KPI"
+    ws_kpi.views.sheetView[0].showGridLines = True
+
+    ws_kpi.append(["LAPORAN EKSEKUTIF HPP & KINERJA PROJECT"])
+    ws_kpi["A1"].font = title_font
+    ws_kpi.append([])
+
+    # Metadata Project
+    ws_kpi.append(["KODE PROJECT", project.code, "", "STATUS PROJECT", project.get_status_display().upper()])
+    ws_kpi.append(["NAMA PROJECT", project.name, "", "PROGRESS FISIK", f"{project.progress_percentage}%"])
+    ws_kpi.append(["CUSTOMER / KLIEN", project.customer_name or "-", "", "TANGGAL MULAI", str(project.start_date or "-")])
+    ws_kpi.append(["NILAI KONTRAK", float(project.contract_value), "", "TARGET SELESAI", str(project.target_date or "-")])
+    ws_kpi.cell(row=6, column=2).number_format = currency_fmt
+    
+    for r in range(3, 7):
+        ws_kpi.cell(row=r, column=1).font = Font(name=font_family, size=10, bold=True, color="475569")
+        ws_kpi.cell(row=r, column=2).font = Font(name=font_family, size=10, bold=True)
+        ws_kpi.cell(row=r, column=4).font = Font(name=font_family, size=10, bold=True, color="475569")
+        ws_kpi.cell(row=r, column=5).font = Font(name=font_family, size=10, bold=True)
+    
+    ws_kpi.append([])
+
+    # KPI Table
+    ws_kpi.append(["KOMPONEN BIAYA & LABA", "ESTIMASI (RENCANA)", "REALISASI (AKTUAL)", "DEVIASI (SELISIH)", "RASIO DEVIASI", "STATUS EVALUASI"])
+    kpi_hdr_row = ws_kpi.max_row
+    for c in range(1, 7):
+        cell = ws_kpi.cell(row=kpi_hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c >= 2 else "left", vertical="center")
+
+    kpi_data = [
+        ("1. Biaya Material (BOM)", float(project.total_est_material), float(project.total_act_material), True),
+        ("2. Biaya Tenaga Kerja (Labor)", float(project.total_est_labor), float(project.total_act_labor), True),
+        ("3. Biaya Barang Jadi (FG)", float(project.total_est_finished_goods), float(project.total_act_finished_goods), True),
+        ("4. Biaya Overhead & Lainnya", float(project.total_est_overhead), float(project.total_act_overhead), True),
+        ("TOTAL BIAYA HPP", float(project.total_hpp_estimated), float(project.total_hpp_actual), True),
+        ("Nilai Kontrak / Penjualan", float(project.contract_value), float(project.contract_value), False),
+        ("Gross Profit (Laba Kotor)", float(project.est_gross_profit), float(project.act_gross_profit), False),
+    ]
+
+    for label, est, act, is_cost in kpi_data:
+        diff = act - est
+        ratio = (diff / est) if est > 0 else 0.0
+        
+        if is_cost:
+            if diff < 0:
+                status_text, b_font, b_fill = "HEMAT (SAVING)", badge_saving_font, badge_saving_fill
+            elif diff > 0:
+                status_text, b_font, b_fill = "LEBIH (OVER BUDGET)", badge_over_font, badge_over_fill
+            else:
+                status_text, b_font, b_fill = "SESUAI BUDGET", badge_neutral_font, badge_neutral_fill
+        else:
+            if "Gross Profit" in label:
+                if diff > 0:
+                    status_text, b_font, b_fill = "PROFIT NAIK", badge_saving_font, badge_saving_fill
+                elif diff < 0:
+                    status_text, b_font, b_fill = "PROFIT TURUN", badge_over_font, badge_over_fill
+                else:
+                    status_text, b_font, b_fill = "SESUAI TARGET", badge_neutral_font, badge_neutral_fill
+            else:
+                status_text, b_font, b_fill = "-", badge_neutral_font, badge_neutral_fill
+
+        ws_kpi.append([label, est, act, diff, ratio, status_text])
+        r_idx = ws_kpi.max_row
+        
+        is_highlight = label in ["TOTAL BIAYA HPP", "Gross Profit (Laba Kotor)"]
+        for c in range(1, 7):
+            cell = ws_kpi.cell(row=r_idx, column=c)
+            cell.border = double_bottom_border if is_highlight else thin_border
+            if is_highlight:
+                cell.font = total_font
+                cell.fill = total_fill
+            if c in [2, 3, 4]:
+                cell.number_format = currency_fmt
+                cell.alignment = Alignment(horizontal="right")
+            elif c == 5:
+                cell.number_format = percent_fmt
+                cell.alignment = Alignment(horizontal="right")
+            elif c == 6:
+                cell.alignment = Alignment(horizontal="center")
+                cell.font = b_font
+                cell.fill = b_fill
+
+    # Margin Row
+    est_margin = float(project.est_margin_pct) / 100.0
+    act_margin = float(project.act_margin_pct) / 100.0
+    margin_diff = act_margin - est_margin
+    ws_kpi.append(["Margin Keuntungan (%)", est_margin, act_margin, margin_diff, "", ""])
+    r_margin = ws_kpi.max_row
+    for c in range(1, 7):
+        cell = ws_kpi.cell(row=r_margin, column=c)
+        cell.font = total_font
+        cell.fill = total_fill
+        cell.border = double_bottom_border
+        if c in [2, 3, 4]:
+            cell.number_format = percent_fmt
+            cell.alignment = Alignment(horizontal="right")
+
+    autofit(ws_kpi)
+
+    # -------------------------------------------------------------------------
+    # SHEET 2: RENCANA HPP (ESTIMASI)
+    # -------------------------------------------------------------------------
+    ws_plan = wb.create_sheet(title="Rencana HPP (Estimasi)")
+    ws_plan.views.sheetView[0].showGridLines = True
+
+    ws_plan.append([f"ANGGARAN & RENCANA BIAYA HPP - {project.code}"])
+    ws_plan["A1"].font = title_font
+    ws_plan.append([])
 
     # 1. BOM Materials
-    ws.append(["1. BILL OF MATERIALS (BOM)"])
-    ws.cell(row=ws.max_row, column=1).fill = sec_fill
-    ws.append(["Tipe", "Item / Part", "Satuan", "Est Qty", "Est Harga", "Est Total", "Real Qty", "Real Harga", "Real Total", "Selisih"])
-    for col in range(1, 11):
-        ws.cell(row=ws.max_row, column=col).fill = header_fill
-        ws.cell(row=ws.max_row, column=col).font = bold_font
+    ws_plan.append(["1. BILL OF MATERIALS (BOM) & BAHAN BAKU"])
+    ws_plan.cell(row=ws_plan.max_row, column=1).font = section_title_font
+    ws_plan.cell(row=ws_plan.max_row, column=1).fill = section_title_fill
+    ws_plan.append(["No", "Tipe", "Item / Material", "Satuan", "Est. Kuantitas", "Est. Harga Satuan", "Est. Total Biaya", "Catatan"])
+    hdr_row = ws_plan.max_row
+    for c in range(1, 9):
+        cell = ws_plan.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [1, 2, 4] else ("right" if c in [5, 6, 7] else "left"))
 
-    for m in project.bom_items.all():
-        diff = float(m.act_total - m.est_total)
-        ws.append([
+    no = 1
+    for m in project.bom_items.all().order_by("parent__id", "id"):
+        indent = "   " if m.parent else ""
+        ws_plan.append([
+            no,
             m.get_item_type_display(),
-            m.name,
+            f"{indent}{m.name}",
             m.unit,
             float(m.est_qty),
             float(m.est_unit_cost),
             float(m.est_total),
-            float(m.act_qty),
-            float(m.act_unit_cost),
-            float(m.act_total),
-            diff
+            m.notes or "-"
         ])
-    ws.append(["Subtotal Material", "", "", "", "", float(project.total_est_material), "", "", float(project.total_act_material), float(project.total_act_material - project.total_est_material)])
-    ws.cell(row=ws.max_row, column=1).font = bold_font
-    ws.append([])
+        curr_row = ws_plan.max_row
+        for c in range(1, 9):
+            cell = ws_plan.cell(row=curr_row, column=c)
+            cell.border = thin_border
+            if c in [5]: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c in [6, 7]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c in [1, 2, 4]: cell.alignment = Alignment(horizontal="center")
+        no += 1
+
+    ws_plan.append(["", "SUBTOTAL MATERIAL", "", "", "", "", float(project.total_est_material), ""])
+    sub_row = ws_plan.max_row
+    for c in range(1, 9):
+        cell = ws_plan.cell(row=sub_row, column=c)
+        cell.font = total_font
+        cell.fill = sub_header_fill
+        cell.border = double_bottom_border
+        if c == 7: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    ws_plan.append([])
 
     # 2. Labor
-    ws.append(["2. BIAYA TENAGA KERJA (LABOR)"])
-    ws.cell(row=ws.max_row, column=1).fill = sec_fill
-    ws.append(["Peran / Posisi", "Satuan", "Est Qty/Jam", "Est Tarif", "Est Total", "Real Qty/Jam", "Real Tarif", "Real Total", "Selisih"])
-    for col in range(1, 10):
-        ws.cell(row=ws.max_row, column=col).fill = header_fill
-        ws.cell(row=ws.max_row, column=col).font = bold_font
+    ws_plan.append(["2. ESTIMASI BIAYA TENAGA KERJA (LABOR)"])
+    ws_plan.cell(row=ws_plan.max_row, column=1).font = section_title_font
+    ws_plan.cell(row=ws_plan.max_row, column=1).fill = section_title_fill
+    ws_plan.append(["No", "Peran / Posisi Tenaga Kerja", "Satuan", "Est. Volume", "Est. Tarif Satuan", "Est. Total Biaya"])
+    hdr_row = ws_plan.max_row
+    for c in range(1, 7):
+        cell = ws_plan.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [1, 3] else ("right" if c in [4, 5, 6] else "left"))
 
+    no = 1
     for l in project.labor_items.all():
-        diff = float(l.act_total - l.est_total)
-        ws.append([
-            l.role_name,
-            l.unit,
-            float(l.est_quantity),
-            float(l.est_rate),
-            float(l.est_total),
-            float(l.act_quantity),
-            float(l.act_rate),
-            float(l.act_total),
-            diff
-        ])
-    ws.append(["Subtotal Tenaga", "", "", "", float(project.total_est_labor), "", "", float(project.total_act_labor), float(project.total_act_labor - project.total_est_labor)])
-    ws.cell(row=ws.max_row, column=1).font = bold_font
-    ws.append([])
+        ws_plan.append([no, l.role_name, l.unit, float(l.est_quantity), float(l.est_rate), float(l.est_total)])
+        curr_row = ws_plan.max_row
+        for c in range(1, 7):
+            cell = ws_plan.cell(row=curr_row, column=c)
+            cell.border = thin_border
+            if c == 4: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c in [5, 6]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c in [1, 3]: cell.alignment = Alignment(horizontal="center")
+        no += 1
+
+    ws_plan.append(["", "SUBTOTAL TENAGA KERJA", "", "", "", float(project.total_est_labor)])
+    sub_row = ws_plan.max_row
+    for c in range(1, 7):
+        cell = ws_plan.cell(row=sub_row, column=c)
+        cell.font = total_font
+        cell.fill = sub_header_fill
+        cell.border = double_bottom_border
+        if c == 6: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    ws_plan.append([])
 
     # 3. Finished Goods
-    ws.append(["3. BARANG JADI (FINISHED GOODS)"])
-    ws.cell(row=ws.max_row, column=1).fill = sec_fill
-    ws.append(["SKU & Nama Barang Jadi", "Satuan", "Est Qty", "Est Harga", "Est Total", "Real Qty", "Real Harga", "Real Total", "Selisih"])
-    for col in range(1, 10):
-        ws.cell(row=ws.max_row, column=col).fill = header_fill
-        ws.cell(row=ws.max_row, column=col).font = bold_font
+    ws_plan.append(["3. ESTIMASI BARANG JADI (FINISHED GOODS)"])
+    ws_plan.cell(row=ws_plan.max_row, column=1).font = section_title_font
+    ws_plan.cell(row=ws_plan.max_row, column=1).fill = section_title_fill
+    ws_plan.append(["No", "SKU", "Nama Barang Jadi", "Satuan", "Est. Kuantitas", "Est. Harga Satuan", "Est. Total Biaya", "Catatan"])
+    hdr_row = ws_plan.max_row
+    for c in range(1, 9):
+        cell = ws_plan.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [1, 2, 4] else ("right" if c in [5, 6, 7] else "left"))
 
+    no = 1
     for fg in project.finished_good_items.all():
-        diff = float(fg.act_total - fg.est_total)
-        ws.append([
-            f"[{fg.finished_good.sku}] {fg.finished_good.name}",
+        ws_plan.append([
+            no,
+            fg.finished_good.sku,
+            fg.finished_good.name,
             fg.finished_good.unit,
             float(fg.est_qty),
             float(fg.est_unit_cost),
             float(fg.est_total),
-            float(fg.act_qty),
-            float(fg.act_unit_cost),
-            float(fg.act_total),
-            diff
+            fg.notes or "-"
         ])
-    ws.append(["Subtotal Barang Jadi", "", "", "", float(project.total_est_finished_goods), "", "", float(project.total_act_finished_goods), float(project.total_act_finished_goods - project.total_est_finished_goods)])
-    ws.cell(row=ws.max_row, column=1).font = bold_font
-    ws.append([])
+        curr_row = ws_plan.max_row
+        for c in range(1, 9):
+            cell = ws_plan.cell(row=curr_row, column=c)
+            cell.border = thin_border
+            if c == 5: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c in [6, 7]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c in [1, 2, 4]: cell.alignment = Alignment(horizontal="center")
+        no += 1
+
+    ws_plan.append(["", "SUBTOTAL BARANG JADI", "", "", "", "", float(project.total_est_finished_goods), ""])
+    sub_row = ws_plan.max_row
+    for c in range(1, 9):
+        cell = ws_plan.cell(row=sub_row, column=c)
+        cell.font = total_font
+        cell.fill = sub_header_fill
+        cell.border = double_bottom_border
+        if c == 7: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    ws_plan.append([])
 
     # 4. Overhead
-    ws.append(["4. BIAYA OVERHEAD & LAINNYA"])
-    ws.cell(row=ws.max_row, column=1).fill = sec_fill
-    ws.append(["Deskripsi Biaya", "Est Biaya", "Real Biaya", "Selisih"])
-    for col in range(1, 5):
-        ws.cell(row=ws.max_row, column=col).fill = header_fill
-        ws.cell(row=ws.max_row, column=col).font = bold_font
+    ws_plan.append(["4. ESTIMASI BIAYA OVERHEAD & OPERASIONAL"])
+    ws_plan.cell(row=ws_plan.max_row, column=1).font = section_title_font
+    ws_plan.cell(row=ws_plan.max_row, column=1).fill = section_title_fill
+    ws_plan.append(["No", "Deskripsi Overhead / Operasional", "Est. Biaya"])
+    hdr_row = ws_plan.max_row
+    for c in range(1, 4):
+        cell = ws_plan.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c == 1 else ("right" if c == 3 else "left"))
 
+    no = 1
     for o in project.overhead_items.all():
-        diff = float(o.act_cost - o.est_cost)
-        ws.append([
-            o.name,
-            float(o.est_cost),
-            float(o.act_cost),
-            diff
-        ])
-    ws.append(["Subtotal Overhead", float(project.total_est_overhead), float(project.total_act_overhead), float(project.total_act_overhead - project.total_est_overhead)])
-    ws.cell(row=ws.max_row, column=1).font = bold_font
-    ws.append([])
+        ws_plan.append([no, o.name, float(o.est_cost)])
+        curr_row = ws_plan.max_row
+        for c in range(1, 4):
+            cell = ws_plan.cell(row=curr_row, column=c)
+            cell.border = thin_border
+            if c == 3: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c == 1: cell.alignment = Alignment(horizontal="center")
+        no += 1
 
-    # Summary
-    ws.append(["RINGKASAN HPP & MARGIN"])
-    ws.cell(row=ws.max_row, column=1).font = bold_font
-    ws.append(["Komponen", "Estimasi (Rp)", "Realisasi (Rp)", "Deviasi (Rp)"])
-    ws.append(["TOTAL HPP", float(project.total_hpp_estimated), float(project.total_hpp_actual), float(project.total_hpp_actual - project.total_hpp_estimated)])
-    ws.append(["Nilai Kontrak / Penjualan", float(project.contract_value), float(project.contract_value), 0])
-    ws.append(["Gross Profit", float(project.est_gross_profit), float(project.act_gross_profit), float(project.act_gross_profit - project.est_gross_profit)])
-    ws.append(["Margin (%)", f"{project.est_margin_pct:.2f}%", f"{project.act_margin_pct:.2f}%", "-"])
+    ws_plan.append(["", "SUBTOTAL OVERHEAD", float(project.total_est_overhead)])
+    sub_row = ws_plan.max_row
+    for c in range(1, 4):
+        cell = ws_plan.cell(row=sub_row, column=c)
+        cell.font = total_font
+        cell.fill = sub_header_fill
+        cell.border = double_bottom_border
+        if c == 3: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    ws_plan.append([])
+    ws_plan.append(["GRAND TOTAL ESTIMASI HPP PROJECT", "", "", "", "", "", float(project.total_hpp_estimated), ""])
+    grand_row = ws_plan.max_row
+    for c in range(1, 9):
+        cell = ws_plan.cell(row=grand_row, column=c)
+        cell.font = Font(name=font_family, size=11, bold=True, color="1E1B4B")
+        cell.fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
+        cell.border = double_bottom_border
+        if c == 7: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    autofit(ws_plan)
+
+    # -------------------------------------------------------------------------
+    # SHEET 3: REALISASI LAPANGAN (AKTUAL)
+    # -------------------------------------------------------------------------
+    ws_act = wb.create_sheet(title="Realisasi Lapangan (Aktual)")
+    ws_act.views.sheetView[0].showGridLines = True
+
+    ws_act.append([f"LOG REALISASI & BIAYA AKTUAL LAPANGAN - {project.code}"])
+    ws_act["A1"].font = title_font
+    ws_act.append([])
+
+    # 1. Realisasi Material
+    ws_act.append(["1. REALISASI PEMAKAIAN MATERIAL / BAHAN BAKU"])
+    ws_act.cell(row=ws_act.max_row, column=1).font = section_title_font
+    ws_act.cell(row=ws_act.max_row, column=1).fill = section_title_fill
+    ws_act.append(["No", "Tanggal", "Item Material", "Ref. BOM", "Status", "Kuantitas", "Satuan", "Harga Satuan", "Total Biaya", "Catatan / Keterangan"])
+    hdr_row = ws_act.max_row
+    for c in range(1, 11):
+        cell = ws_act.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [1, 2, 5, 7] else ("right" if c in [6, 8, 9] else "left"))
+
+    no = 1
+    if project.bom_realizations.exists():
+        for r in project.bom_realizations.all().order_by("date", "created_at"):
+            ref_bom = r.bom_item.name if r.bom_item else "-"
+            status_lbl = "Substitusi" if r.is_substitute else "Standar"
+            ws_act.append([
+                no,
+                str(r.date),
+                r.item_name,
+                ref_bom,
+                status_lbl,
+                float(r.qty),
+                r.unit,
+                float(r.unit_cost),
+                float(r.total_cost),
+                r.notes or "-"
+            ])
+            curr_row = ws_act.max_row
+            for c in range(1, 11):
+                cell = ws_act.cell(row=curr_row, column=c)
+                cell.border = thin_border
+                if c == 6: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [8, 9]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [1, 2, 5, 7]: cell.alignment = Alignment(horizontal="center")
+            no += 1
+    else:
+        for m in project.bom_items.filter(item_type="material", act_qty__gt=0):
+            ws_act.append([
+                no,
+                str(project.start_date or "-"),
+                m.name,
+                m.name,
+                "Standar",
+                float(m.act_qty),
+                m.unit,
+                float(m.act_unit_cost),
+                float(m.act_total),
+                m.notes or "-"
+            ])
+            curr_row = ws_act.max_row
+            for c in range(1, 11):
+                cell = ws_act.cell(row=curr_row, column=c)
+                cell.border = thin_border
+                if c == 6: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [8, 9]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [1, 2, 5, 7]: cell.alignment = Alignment(horizontal="center")
+            no += 1
+
+    ws_act.append(["", "SUBTOTAL REALISASI MATERIAL", "", "", "", "", "", "", float(project.total_act_material), ""])
+    sub_row = ws_act.max_row
+    for c in range(1, 11):
+        cell = ws_act.cell(row=sub_row, column=c)
+        cell.font = total_font
+        cell.fill = sub_header_fill
+        cell.border = double_bottom_border
+        if c == 9: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    ws_act.append([])
+
+    # 2. Realisasi Tenaga Kerja
+    ws_act.append(["2. REALISASI TENAGA KERJA (LABOR)"])
+    ws_act.cell(row=ws_act.max_row, column=1).font = section_title_font
+    ws_act.cell(row=ws_act.max_row, column=1).fill = section_title_fill
+    ws_act.append(["No", "Tanggal", "Peran / Posisi", "Tipe", "Volume", "Satuan", "Tarif Satuan", "Total Biaya", "Catatan"])
+    hdr_row = ws_act.max_row
+    for c in range(1, 10):
+        cell = ws_act.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [1, 2, 4, 6] else ("right" if c in [5, 7, 8] else "left"))
+
+    no = 1
+    if project.labor_realizations.exists():
+        for lr in project.labor_realizations.all().order_by("date", "created_at"):
+            tipe_lbl = "Tambahan" if lr.is_additional else "Rencana"
+            ws_act.append([
+                no,
+                str(lr.date),
+                lr.role_name,
+                tipe_lbl,
+                float(lr.quantity),
+                lr.unit,
+                float(lr.rate),
+                float(lr.total_cost),
+                lr.notes or "-"
+            ])
+            curr_row = ws_act.max_row
+            for c in range(1, 10):
+                cell = ws_act.cell(row=curr_row, column=c)
+                cell.border = thin_border
+                if c == 5: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [7, 8]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [1, 2, 4, 6]: cell.alignment = Alignment(horizontal="center")
+            no += 1
+    else:
+        for l in project.labor_items.filter(act_quantity__gt=0):
+            ws_act.append([
+                no,
+                str(project.start_date or "-"),
+                l.role_name,
+                "Rencana",
+                float(l.act_quantity),
+                l.unit,
+                float(l.act_rate),
+                float(l.act_total),
+                "-"
+            ])
+            curr_row = ws_act.max_row
+            for c in range(1, 10):
+                cell = ws_act.cell(row=curr_row, column=c)
+                cell.border = thin_border
+                if c == 5: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [7, 8]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [1, 2, 4, 6]: cell.alignment = Alignment(horizontal="center")
+            no += 1
+
+    ws_act.append(["", "SUBTOTAL REALISASI TENAGA KERJA", "", "", "", "", "", float(project.total_act_labor), ""])
+    sub_row = ws_act.max_row
+    for c in range(1, 10):
+        cell = ws_act.cell(row=sub_row, column=c)
+        cell.font = total_font
+        cell.fill = sub_header_fill
+        cell.border = double_bottom_border
+        if c == 8: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    ws_act.append([])
+
+    # 3. Realisasi Barang Jadi
+    ws_act.append(["3. REALISASI PEMAKAIAN BARANG JADI (FINISHED GOODS)"])
+    ws_act.cell(row=ws_act.max_row, column=1).font = section_title_font
+    ws_act.cell(row=ws_act.max_row, column=1).fill = section_title_fill
+    ws_act.append(["No", "Tanggal", "SKU", "Nama Barang Jadi", "Kuantitas", "Satuan", "Harga Satuan", "Total Biaya", "Catatan"])
+    hdr_row = ws_act.max_row
+    for c in range(1, 10):
+        cell = ws_act.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [1, 2, 3, 6] else ("right" if c in [5, 7, 8] else "left"))
+
+    no = 1
+    if project.finished_good_realizations.exists():
+        for fgr in project.finished_good_realizations.all().order_by("date", "created_at"):
+            ws_act.append([
+                no,
+                str(fgr.date),
+                fgr.finished_good.sku,
+                fgr.finished_good.name,
+                float(fgr.quantity),
+                fgr.finished_good.unit,
+                float(fgr.unit_cost),
+                float(fgr.total_cost),
+                fgr.notes or "-"
+            ])
+            curr_row = ws_act.max_row
+            for c in range(1, 10):
+                cell = ws_act.cell(row=curr_row, column=c)
+                cell.border = thin_border
+                if c == 5: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [7, 8]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [1, 2, 3, 6]: cell.alignment = Alignment(horizontal="center")
+            no += 1
+    else:
+        for fg in project.finished_good_items.filter(act_qty__gt=0):
+            ws_act.append([
+                no,
+                str(project.start_date or "-"),
+                fg.finished_good.sku,
+                fg.finished_good.name,
+                float(fg.act_qty),
+                fg.finished_good.unit,
+                float(fg.act_unit_cost),
+                float(fg.act_total),
+                fg.notes or "-"
+            ])
+            curr_row = ws_act.max_row
+            for c in range(1, 10):
+                cell = ws_act.cell(row=curr_row, column=c)
+                cell.border = thin_border
+                if c == 5: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [7, 8]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [1, 2, 3, 6]: cell.alignment = Alignment(horizontal="center")
+            no += 1
+
+    ws_act.append(["", "SUBTOTAL REALISASI BARANG JADI", "", "", "", "", "", float(project.total_act_finished_goods), ""])
+    sub_row = ws_act.max_row
+    for c in range(1, 10):
+        cell = ws_act.cell(row=sub_row, column=c)
+        cell.font = total_font
+        cell.fill = sub_header_fill
+        cell.border = double_bottom_border
+        if c == 8: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    ws_act.append([])
+
+    # 4. Realisasi Overhead
+    ws_act.append(["4. REALISASI BIAYA OVERHEAD & OPERASIONAL"])
+    ws_act.cell(row=ws_act.max_row, column=1).font = section_title_font
+    ws_act.cell(row=ws_act.max_row, column=1).fill = section_title_fill
+    ws_act.append(["No", "Tanggal", "Deskripsi Biaya Overhead", "Tipe", "Total Biaya", "Catatan"])
+    hdr_row = ws_act.max_row
+    for c in range(1, 7):
+        cell = ws_act.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [1, 2, 4] else ("right" if c == 5 else "left"))
+
+    no = 1
+    if project.overhead_realizations.exists():
+        for orh in project.overhead_realizations.all().order_by("date", "created_at"):
+            tipe_lbl = "Tambahan" if orh.is_additional else "Rencana"
+            ws_act.append([
+                no,
+                str(orh.date),
+                orh.expense_name,
+                tipe_lbl,
+                float(orh.cost),
+                orh.notes or "-"
+            ])
+            curr_row = ws_act.max_row
+            for c in range(1, 7):
+                cell = ws_act.cell(row=curr_row, column=c)
+                cell.border = thin_border
+                if c == 5: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [1, 2, 4]: cell.alignment = Alignment(horizontal="center")
+            no += 1
+    else:
+        for o in project.overhead_items.filter(act_cost__gt=0):
+            ws_act.append([
+                no,
+                str(project.start_date or "-"),
+                o.name,
+                "Rencana",
+                float(o.act_cost),
+                "-"
+            ])
+            curr_row = ws_act.max_row
+            for c in range(1, 7):
+                cell = ws_act.cell(row=curr_row, column=c)
+                cell.border = thin_border
+                if c == 5: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+                elif c in [1, 2, 4]: cell.alignment = Alignment(horizontal="center")
+            no += 1
+
+    ws_act.append(["", "SUBTOTAL REALISASI OVERHEAD", "", "", float(project.total_act_overhead), ""])
+    sub_row = ws_act.max_row
+    for c in range(1, 7):
+        cell = ws_act.cell(row=sub_row, column=c)
+        cell.font = total_font
+        cell.fill = sub_header_fill
+        cell.border = double_bottom_border
+        if c == 5: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    ws_act.append([])
+    ws_act.append(["GRAND TOTAL REALISASI HPP PROJECT", "", "", "", "", "", "", "", float(project.total_hpp_actual), ""])
+    grand_row = ws_act.max_row
+    for c in range(1, 11):
+        cell = ws_act.cell(row=grand_row, column=c)
+        cell.font = Font(name=font_family, size=11, bold=True, color="1E1B4B")
+        cell.fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
+        cell.border = double_bottom_border
+        if c == 9: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+
+    autofit(ws_act)
+
+    # -------------------------------------------------------------------------
+    # SHEET 4: ANALISIS VARIANS (EST VS REAL)
+    # -------------------------------------------------------------------------
+    ws_var = wb.create_sheet(title="Analisis Varians")
+    ws_var.views.sheetView[0].showGridLines = True
+
+    ws_var.append([f"ANALISIS DEVIASI & VARIANS (ESTIMASI VS REALISASI) - {project.code}"])
+    ws_var["A1"].font = title_font
+    ws_var.append([])
+
+    # Table Header
+    ws_var.append([
+        "Komponen / Item", "Satuan",
+        "Est. Qty", "Est. Total",
+        "Real. Qty", "Real. Total",
+        "Deviasi Biaya", "Deviasi (%)", "Status Evaluasi"
+    ])
+    hdr_row = ws_var.max_row
+    for c in range(1, 10):
+        cell = ws_var.cell(row=hdr_row, column=c)
+        cell.font = tbl_header_font
+        cell.fill = tbl_header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if c in [2, 9] else ("right" if c in [3, 4, 5, 6, 7, 8] else "left"))
+
+    def append_variance_row(ws, name, unit, est_q, est_tot, act_q, act_tot):
+        diff = act_tot - est_tot
+        ratio = (diff / est_tot) if est_tot > 0 else (0.0 if diff == 0 else 1.0)
+        
+        if diff < 0:
+            status_text, b_font, b_fill = "HEMAT (SAVING)", badge_saving_font, badge_saving_fill
+        elif diff > 0:
+            status_text, b_font, b_fill = "LEBIH (OVER)", badge_over_font, badge_over_fill
+        else:
+            status_text, b_font, b_fill = "SESUAI", badge_neutral_font, badge_neutral_fill
+
+        ws.append([name, unit, est_q, est_tot, act_q, act_tot, diff, ratio, status_text])
+        r_idx = ws.max_row
+        for c in range(1, 10):
+            cell = ws.cell(row=r_idx, column=c)
+            cell.border = thin_border
+            if c in [3, 5]: cell.number_format = qty_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c in [4, 6, 7]: cell.number_format = currency_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c == 8: cell.number_format = percent_fmt; cell.alignment = Alignment(horizontal="right")
+            elif c == 2: cell.alignment = Alignment(horizontal="center")
+            elif c == 9: cell.font = b_font; cell.fill = b_fill; cell.alignment = Alignment(horizontal="center")
+
+    # Section Material
+    ws_var.append(["A. MATERIAL & BAHAN BAKU", "", "", "", "", "", "", "", ""])
+    format_row(ws_var, ws_var.max_row, font=sub_header_font, fill=sub_header_fill, border=thin_border)
+    for m in project.bom_items.filter(item_type="material"):
+        act_q = float(m.total_realized_qty) if m.realizations.exists() else float(m.act_qty)
+        act_t = float(m.total_realized_cost) if m.realizations.exists() else float(m.act_total)
+        append_variance_row(ws_var, m.name, m.unit, float(m.est_qty), float(m.est_total), act_q, act_t)
+
+    # Substitusi Material jika ada
+    substitutes = project.bom_realizations.filter(Q(is_substitute=True) | Q(bom_item__isnull=True))
+    for s in substitutes:
+        append_variance_row(ws_var, f"[Substitusi] {s.item_name}", s.unit, 0.0, 0.0, float(s.qty), float(s.total_cost))
+
+    # Section Labor
+    ws_var.append(["B. TENAGA KERJA (LABOR)", "", "", "", "", "", "", "", ""])
+    format_row(ws_var, ws_var.max_row, font=sub_header_font, fill=sub_header_fill, border=thin_border)
+    for l in project.labor_items.all():
+        act_q = sum(float(r.quantity) for r in l.realizations.all()) if l.realizations.exists() else float(l.act_quantity)
+        act_t = sum(float(r.total_cost) for r in l.realizations.all()) if l.realizations.exists() else float(l.act_total)
+        append_variance_row(ws_var, l.role_name, l.unit, float(l.est_quantity), float(l.est_total), act_q, act_t)
+
+    # Section Finished Goods
+    ws_var.append(["C. BARANG JADI (FINISHED GOODS)", "", "", "", "", "", "", "", ""])
+    format_row(ws_var, ws_var.max_row, font=sub_header_font, fill=sub_header_fill, border=thin_border)
+    for fg in project.finished_good_items.all():
+        act_q = sum(float(r.quantity) for r in fg.realizations.all()) if fg.realizations.exists() else float(fg.act_qty)
+        act_t = sum(float(r.total_cost) for r in fg.realizations.all()) if fg.realizations.exists() else float(fg.act_total)
+        append_variance_row(ws_var, f"[{fg.finished_good.sku}] {fg.finished_good.name}", fg.finished_good.unit, float(fg.est_qty), float(fg.est_total), act_q, act_t)
+
+    # Section Overhead
+    ws_var.append(["D. OVERHEAD & BIAYA LAINNYA", "", "", "", "", "", "", "", ""])
+    format_row(ws_var, ws_var.max_row, font=sub_header_font, fill=sub_header_fill, border=thin_border)
+    for o in project.overhead_items.all():
+        act_t = sum(float(r.cost) for r in o.realizations.all()) if o.realizations.exists() else float(o.act_cost)
+        append_variance_row(ws_var, o.name, "ls", 1.0, float(o.est_cost), 1.0, act_t)
+
+    # Summary Row
+    ws_var.append([])
+    append_variance_row(
+        ws_var,
+        "TOTAL KESELURUHAN HPP PROJECT",
+        "-",
+        0.0, float(project.total_hpp_estimated),
+        0.0, float(project.total_hpp_actual)
+    )
+    r_last = ws_var.max_row
+    for c in range(1, 10):
+        cell = ws_var.cell(row=r_last, column=c)
+        cell.font = Font(name=font_family, size=11, bold=True, color="1E1B4B")
+        cell.fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
+        cell.border = double_bottom_border
+
+    autofit(ws_var)
 
     response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    response["Content-Disposition"] = f'attachment; filename="HPP_{project.code}.xlsx"'
+    response["Content-Disposition"] = f'attachment; filename="Laporan_HPP_{project.code}.xlsx"'
     wb.save(response)
     return response
 
@@ -897,11 +1691,17 @@ def print_project_pdf(request, uuid):
     project = get_object_or_404(Project, uuid=uuid)
     return render(request, "hpp/project_print.html", {
         "project": project,
-        "materials": project.bom_items.all(),
-        "labors": project.labor_items.all(),
-        "overheads": project.overhead_items.all(),
-        "finished_goods": project.finished_good_items.all(),
+        "materials": project.bom_items.all().order_by("parent__id", "id"),
+        "labors": project.labor_items.all().order_by("id"),
+        "overheads": project.overhead_items.all().order_by("id"),
+        "finished_goods": project.finished_good_items.all().order_by("id"),
+        "bom_realizations": project.bom_realizations.all().order_by("date", "created_at"),
+        "labor_realizations": project.labor_realizations.all().order_by("date", "created_at"),
+        "overhead_realizations": project.overhead_realizations.all().order_by("date", "created_at"),
+        "finished_good_realizations": project.finished_good_realizations.all().order_by("date", "created_at"),
+        "now": datetime.now(),
     })
+
 
 def finished_good_update(request, uuid):
     fg = get_object_or_404(FinishedGood, uuid=uuid)

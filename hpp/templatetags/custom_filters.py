@@ -1,4 +1,4 @@
-﻿from django import template
+from django import template
 from decimal import Decimal
 
 register = template.Library()
@@ -30,3 +30,17 @@ def rupiah_format(value):
     main_part, dec_part = formatted.split(".")
     main_part = main_part.replace(",", ".")
     return f"{main_part},{dec_part}"
+
+
+@register.filter(name="subtract")
+def subtract(value, arg):
+    """
+    Mengurangi value dengan arg: value - arg
+    """
+    try:
+        val = Decimal(str(value or 0))
+        arg_val = Decimal(str(arg or 0))
+        return val - arg_val
+    except Exception:
+        return 0
+

@@ -1,0 +1,294 @@
+{% load custom_filters %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BAP_{{ project.code }}_Berita_Acara_Penyelesaian</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { 
+                background: white !important; 
+                padding: 0 !important; 
+                font-size: 11px !important; 
+                color: #0f172a !important; 
+            }
+            @page { 
+                size: A4 portrait; 
+                margin: 12mm 12mm 12mm 12mm; 
+            }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+        }
+        @media screen {
+            body { background-color: #f1f5f9; }
+            .print-container {
+                max-width: 210mm;
+                min-height: 297mm;
+                margin: 20px auto;
+                background: white;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            }
+        }
+        .bap-border {
+            border: 1px solid #cbd5e1;
+        }
+    </style>
+</head>
+<body class="text-slate-800 font-sans antialiased text-xs">
+
+    <!-- Screen Toolbar (Hidden on Print) -->
+    <div class="no-print bg-slate-900 text-white py-3 px-6 sticky top-0 z-50 shadow-md">
+        <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <span class="font-bold text-sm tracking-wide text-indigo-300">BERITA ACARA PENYELESAIAN PROYEK (BAP)</span>
+                <span class="text-xs bg-slate-800 px-2.5 py-1 rounded font-mono text-slate-300">#{{ project.code }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="{% url 'project_detail' project.uuid %}" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    <span>Kembali ke Project</span>
+                </a>
+                <button onclick="window.print()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    <span>Cetak Sekarang / Simpan PDF</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Printable Sheet -->
+    <div class="print-container p-10 flex flex-col justify-between">
+        <div class="space-y-6">
+
+            <!-- KOP DOKUMEN -->
+            <div class="flex items-start justify-between border-b-2 border-slate-900 pb-4">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xl tracking-wider">
+                        BP
+                    </div>
+                    <div>
+                        <h2 class="text-base font-black tracking-tight text-slate-900 uppercase">PT BAGUS PRAKO KARYA</h2>
+                        <p class="text-[10px] text-slate-500">General Contractor, Interior Specialist & Custom Manufacturing</p>
+                        <p class="text-[10px] text-slate-400">Jl. Industri Manufaktur No. 88, Kawasan Produksi | Telp: (021) 8899-7766</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="inline-block px-3 py-1 bg-slate-100 rounded text-[10px] font-bold tracking-widest text-slate-700 uppercase border border-slate-200">
+                        LEMBAR RESMI MANAJEMEN
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-1">Dicetak pada: {{ now|date:"d F Y, H:i" }} WIB</div>
+                </div>
+            </div>
+
+            <!-- JUDUL BERITA ACARA -->
+            <div class="text-center space-y-1 py-1">
+                <h1 class="text-lg font-black tracking-wide text-slate-900 uppercase underline decoration-2 underline-offset-4">
+                    BERITA ACARA PENYELESAIAN PROYEK & SERAH TERIMA
+                </h1>
+                <p class="text-xs font-mono font-bold text-indigo-700">
+                    Nomor: BAP/{{ project.code }}/{{ project.completed_date|date:"Ym"|default:now|date:"Ym" }}
+                </p>
+            </div>
+
+            <!-- KALIMAT PEMBUKA LEGAL -->
+            <div class="text-justify leading-relaxed text-slate-700 text-[11px] bg-slate-50/60 p-3 rounded-lg border border-slate-200">
+                Pada hari ini, <strong>{{ project.completed_date|date:"l, d F Y"|default:now|date:"l, d F Y" }}</strong>, kami yang bertanda tangan di bawah ini menyatakan bahwa seluruh pekerjaan manufaktur dan pengadaan untuk proyek di bawah ini telah diselesaikan dengan baik, sesuai spesifikasi teknis dan standar mutu yang disepakati bersama.
+            </div>
+
+            <!-- TABEL INFORMASI PROYEK -->
+            <div>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-slate-800"></span>
+                    1. Identitas & Kontrak Pekerjaan
+                </h3>
+                <table class="w-full text-left text-[11px] border border-slate-300">
+                    <tbody>
+                        <tr class="border-b border-slate-200">
+                            <td class="w-36 bg-slate-100 p-2 font-semibold text-slate-600">Kode Proyek</td>
+                            <td class="p-2 font-mono font-bold text-slate-900">#{{ project.code }}</td>
+                            <td class="w-36 bg-slate-100 p-2 font-semibold text-slate-600">Pemberi Kerja / Klien</td>
+                            <td class="p-2 font-bold text-slate-900">{{ project.customer_name|default:"-" }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-200">
+                            <td class="bg-slate-100 p-2 font-semibold text-slate-600">Nama Pekerjaan</td>
+                            <td colspan="3" class="p-2 font-bold text-slate-900">{{ project.name }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-200">
+                            <td class="bg-slate-100 p-2 font-semibold text-slate-600">Tanggal Dimulai</td>
+                            <td class="p-2">{{ project.start_date|date:"d F Y"|default:"-" }}</td>
+                            <td class="bg-slate-100 p-2 font-semibold text-slate-600">Tanggal Selesai Resmi</td>
+                            <td class="p-2 font-semibold text-emerald-700">{{ project.completed_date|date:"d F Y"|default:now|date:"d F Y" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-slate-100 p-2 font-semibold text-slate-600">Nilai Kontrak (SPK)</td>
+                            <td class="p-2 font-bold text-slate-900 font-mono">Rp {{ project.contract_value|rupiah }}</td>
+                            <td class="bg-slate-100 p-2 font-semibold text-slate-600">Status Penyelesaian</td>
+                            <td class="p-2">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    SELESAI (100%)
+                                </span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- REKAPITULASI BIAYA HPP & KINERJA PROYEK -->
+            <div>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-slate-800"></span>
+                    2. Ringkasan Kinerja HPP & Finansial Akhir
+                </h3>
+                <div class="grid grid-cols-4 gap-2">
+                    <div class="p-2.5 bg-slate-50 border border-slate-200 rounded text-center">
+                        <div class="text-[10px] text-slate-500 uppercase">Nilai Kontrak</div>
+                        <div class="text-xs font-black text-slate-900 font-mono mt-0.5">Rp {{ project.contract_value|rupiah }}</div>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 border border-slate-200 rounded text-center">
+                        <div class="text-[10px] text-slate-500 uppercase">Realisasi Total HPP</div>
+                        <div class="text-xs font-black text-slate-900 font-mono mt-0.5">Rp {{ project.total_hpp_actual|rupiah }}</div>
+                        <div class="text-[9px] text-slate-400">Budget: Rp {{ project.total_hpp_estimated|rupiah }}</div>
+                    </div>
+                    <div class="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-center">
+                        <div class="text-[10px] text-emerald-800 uppercase font-bold">Gross Profit Riil</div>
+                        <div class="text-xs font-black text-emerald-700 font-mono mt-0.5">Rp {{ project.act_gross_profit|rupiah }}</div>
+                        <div class="text-[9px] font-semibold text-emerald-600">Margin: {{ project.act_margin_pct|rupiah }}%</div>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 border border-slate-200 rounded text-center">
+                        <div class="text-[10px] text-slate-500 uppercase">Efisiensi Anggaran</div>
+                        {% if project.total_hpp_actual <= project.total_hpp_estimated %}
+                        <div class="text-xs font-bold text-emerald-600 mt-0.5">HEMAT (Under Budget)</div>
+                        <div class="text-[9px] text-slate-500">Sisa Plafon: Rp {{ project.total_hpp_estimated|add:"0"|rupiah }}</div>
+                        {% else %}
+                        <div class="text-xs font-bold text-rose-600 mt-0.5">DEFISIT (Over Budget)</div>
+                        <div class="text-[9px] text-rose-500">Selisih: Rp {{ project.total_hpp_actual|rupiah }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- HASIL PRODUKSI / SERAH TERIMA BARANG JADI (JIKA ADA) -->
+            {% if prod_mutations or finished_goods %}
+            <div>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-slate-800"></span>
+                    3. Hasil Produksi / Barang Jadi yang Diserah-terimakan
+                </h3>
+                <table class="w-full text-left text-[11px] border border-slate-300">
+                    <thead>
+                        <tr class="bg-slate-100 border-b border-slate-300 text-slate-700">
+                            <th class="p-2 w-10 text-center">No</th>
+                            <th class="p-2 w-28">SKU</th>
+                            <th class="p-2">Nama Barang Jadi / Komponen</th>
+                            <th class="p-2 w-24 text-right">Kuantitas</th>
+                            <th class="p-2 w-20 text-center">Satuan</th>
+                            <th class="p-2 w-36">Keterangan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if prod_mutations %}
+                            {% for m in prod_mutations %}
+                            <tr class="border-b border-slate-200">
+                                <td class="p-2 text-center">{{ forloop.counter }}</td>
+                                <td class="p-2 font-mono font-bold text-slate-800">{{ m.finished_good.sku }}</td>
+                                <td class="p-2 font-semibold text-slate-900">{{ m.finished_good.name }}</td>
+                                <td class="p-2 text-right font-bold font-mono">{{ m.quantity|rupiah }}</td>
+                                <td class="p-2 text-center">{{ m.finished_good.unit }}</td>
+                                <td class="p-2 text-slate-500 text-[10px]">{{ m.notes|default:"Hasil produksi selesai" }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            {% for fg in finished_goods %}
+                            <tr class="border-b border-slate-200">
+                                <td class="p-2 text-center">{{ forloop.counter }}</td>
+                                <td class="p-2 font-mono font-bold text-slate-800">{{ fg.finished_good.sku }}</td>
+                                <td class="p-2 font-semibold text-slate-900">{{ fg.finished_good.name }}</td>
+                                <td class="p-2 text-right font-bold font-mono">
+                                    {% if fg.act_qty > 0 %}{{ fg.act_qty|rupiah }}{% else %}{{ fg.est_qty|rupiah }}{% endif %}
+                                </td>
+                                <td class="p-2 text-center">{{ fg.finished_good.unit }}</td>
+                                <td class="p-2 text-slate-500 text-[10px]">{{ fg.notes|default:"Hasil pengerjaan selesai" }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- CATATAN PENUTUPAN & EVALUASI AKHIR -->
+            <div>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-slate-800"></span>
+                    {% if prod_mutations or finished_goods %}4{% else %}3{% endif %}. Catatan & Evaluasi Akhir Proyek
+                </h3>
+                <div class="p-3 bg-white border border-slate-300 rounded text-[11px] text-slate-700 min-h-[50px] leading-relaxed">
+                    {{ project.closing_notes|default:"Seluruh tahapan pengerjaan telah diperiksa oleh supervisor dan dinyatakan memenuhi standar spesifikasi kontrak tanpa ada kendala yang tertunda."|linebreaksbr }}
+                </div>
+            </div>
+
+            <!-- LEMBAR PERSETUJUAN & TANDA TANGAN 4 PIHAK -->
+            <div class="pt-2">
+                <div class="text-center text-[10px] text-slate-500 mb-3">
+                    Demikian Berita Acara Penyelesaian Proyek ini dibuat dengan sebenarnya dan ditandatangani untuk dipergunakan sebagaimana mestinya.
+                </div>
+                <div class="grid grid-cols-4 gap-3 text-center text-[10px]">
+                    <div class="border border-slate-200 rounded p-2.5">
+                        <div class="text-slate-400 font-semibold mb-1">Dibuat Oleh,</div>
+                        <div class="font-bold text-slate-800">Project Manager</div>
+                        <div class="h-16 flex items-end justify-center">
+                            <span class="text-[9px] text-slate-300 italic">(Tanda Tangan)</span>
+                        </div>
+                        <div class="border-t border-slate-300 pt-1 font-semibold text-slate-700 mt-1">
+                            ( .................................... )
+                        </div>
+                    </div>
+                    <div class="border border-slate-200 rounded p-2.5">
+                        <div class="text-slate-400 font-semibold mb-1">Diperiksa Oleh,</div>
+                        <div class="font-bold text-slate-800">Kepala Produksi</div>
+                        <div class="h-16 flex items-end justify-center">
+                            <span class="text-[9px] text-slate-300 italic">(Tanda Tangan)</span>
+                        </div>
+                        <div class="border-t border-slate-300 pt-1 font-semibold text-slate-700 mt-1">
+                            ( .................................... )
+                        </div>
+                    </div>
+                    <div class="border border-slate-200 rounded p-2.5">
+                        <div class="text-slate-400 font-semibold mb-1">Divalidasi Oleh,</div>
+                        <div class="font-bold text-slate-800">Cost Control / Finance</div>
+                        <div class="h-16 flex items-end justify-center">
+                            <span class="text-[9px] text-slate-300 italic">(Tanda Tangan)</span>
+                        </div>
+                        <div class="border-t border-slate-300 pt-1 font-semibold text-slate-700 mt-1">
+                            ( .................................... )
+                        </div>
+                    </div>
+                    <div class="border border-slate-200 rounded p-2.5 bg-slate-50/50">
+                        <div class="text-slate-400 font-semibold mb-1">Diterima Oleh,</div>
+                        <div class="font-bold text-slate-800">Pemberi Tugas (Klien)</div>
+                        <div class="h-16 flex items-end justify-center">
+                            <span class="text-[9px] text-slate-300 italic">(Tanda Tangan & Cap)</span>
+                        </div>
+                        <div class="border-t border-slate-300 pt-1 font-semibold text-slate-700 mt-1">
+                            ( {{ project.customer_name|default:"...................................." }} )
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- FOOTER DOKUMEN -->
+        <div class="pt-6 mt-6 border-t border-slate-200 flex items-center justify-between text-[9px] text-slate-400">
+            <div>Dokumen Sistem Otomatis HPP & BOM Manufaktur - Keabsahan Terverifikasi</div>
+            <div>Halaman 1 dari 1</div>
+        </div>
+    </div>
+
+</body>
+</html>
