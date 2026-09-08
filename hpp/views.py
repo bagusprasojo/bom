@@ -15,7 +15,7 @@ from openpyxl.utils import get_column_letter
 from .models import (
     UnitMaster,
     Customer,
-    Employee, Attendance, EmployeeWorkLog,
+    Employee, Attendance, AbsenceType, EmployeeWorkLog,
     Project, BOMItem, ProjectLabor, ProjectOverhead,
     MaterialMaster, LaborMaster, FinishedGood,
     ProjectFinishedGood, FinishedGoodStockMutation,
@@ -1744,6 +1744,7 @@ def attendance_list(request):
     """
     selected_date_str = request.GET.get("date", "").strip()
     status_filter = request.GET.get("status", "").strip()
+    absence_type_filter = request.GET.get("absence_type", "").strip()
     query = request.GET.get("q", "").strip()
 
     if selected_date_str:
@@ -1754,34 +1755,50 @@ def attendance_list(request):
     else:
         filter_date = date.today()
 
-    attendances = Attendance.objects.filter(date=filter_date).select_related("employee")
+    attendances = Attendance.objects.filter(date=filter_date).select_related("employee", "absence_type")
     if status_filter:
-        attendances = attendances.filter(status=status_filter)
+        if status_filter == "HADIR":
+            attendances = attendances.filter(status="HADIR")
+        elif status_filter == "TIDAK_HADIR":
+            attendances = attendances.exclude(status="HADIR")
+        else:
+            attendances = attendances.filter(status=status_filter)
+    if absence_type_filter:
+        attendances = attendances.filter(absence_type__uuid=absence_type_filter)
     if query:
         attendances = attendances.filter(Q(employee__name__icontains=query) | Q(employee__nik__icontains=query))
 
     employees = Employee.objects.filter(is_active=True).order_by("name")
+    absence_types = AbsenceType.objects.filter(is_active=True).order_by("category", "code")
 
     # Summary KPI
-    all_day_records = Attendance.objects.filter(date=filter_date)
+    all_day_records = Attendance.objects.filter(date=filter_date).select_related("absence_type")
     total_hadir = all_day_records.filter(status="HADIR").count()
-    total_ijin = all_day_records.filter(status="IJIN").count()
-    total_sakit = all_day_records.filter(status="SAKIT").count()
-    total_alpha = all_day_records.filter(status="ALPHA").count()
+    total_ijin = all_day_records.filter(Q(status="IJIN") | Q(absence_type__category="PERMIT")).count()
+    total_sakit = all_day_records.filter(Q(status="SAKIT") | Q(absence_type__category="SICK")).count()
+    total_cuti = all_day_records.filter(absence_type__category="LEAVE").count()
+    total_dinas = all_day_records.filter(absence_type__category="OFFICIAL_TRAVEL").count()
+    total_alpha = all_day_records.filter(Q(status="ALPHA") | Q(absence_type__category="ABSENT")).count()
+    total_tidak_hadir = all_day_records.exclude(status="HADIR").count()
     total_ot_hours = sum(a.overtime_hours for a in all_day_records)
     total_wage_day = sum(a.wage for a in all_day_records)
 
     return render(request, "hpp/attendance_list.html", {
         "attendances": attendances,
         "employees": employees,
+        "absence_types": absence_types,
         "selected_date": filter_date.strftime("%Y-%m-%d"),
         "status_filter": status_filter,
+        "absence_type_filter": absence_type_filter,
         "query": query,
         "status_choices": Attendance.STATUS_CHOICES,
         "total_hadir": total_hadir,
         "total_ijin": total_ijin,
         "total_sakit": total_sakit,
+        "total_cuti": total_cuti,
+        "total_dinas": total_dinas,
         "total_alpha": total_alpha,
+        "total_tidak_hadir": total_tidak_hadir,
         "total_ot_hours": total_ot_hours,
         "total_wage_day": total_wage_day,
     })
@@ -1792,26 +1809,49 @@ def attendance_create(request):
         emp_uuid = request.POST.get("employee_uuid")
         att_date_str = request.POST.get("date") or str(date.today())
         status = request.POST.get("status", "HADIR")
+        absence_type_uuid = request.POST.get("absence_type_uuid", "").strip()
         check_in = request.POST.get("check_in") or None
         check_out = request.POST.get("check_out") or None
         overtime_hours = Decimal(request.POST.get("overtime_hours") or 0)
-        notes = request.POST.get("notes", "")
+        notes = request.POST.get("notes", "").strip()
 
         employee = get_object_or_404(Employee, uuid=emp_uuid)
-        att_date = datetime.strptime(att_date_str, "%Y-%m-%d").date()
+        try:
+            att_date = datetime.strptime(att_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            att_date = date.today()
 
-        Attendance.objects.update_or_create(
+        absence_type = None
+        if status == "HADIR":
+            absence_type = None
+        else:
+            if absence_type_uuid:
+                absence_type = AbsenceType.objects.filter(uuid=absence_type_uuid).first()
+                status = "TIDAK_HADIR"
+            elif status in ["IJIN", "SAKIT", "ALPHA"]:
+                pass
+            else:
+                status = "TIDAK_HADIR"
+
+            # Reset jam jika bukan dinas luar
+            if not absence_type or absence_type.category != "OFFICIAL_TRAVEL":
+                check_in = None
+                check_out = None
+                overtime_hours = Decimal(0)
+
+        att, _ = Attendance.objects.update_or_create(
             employee=employee,
             date=att_date,
             defaults={
                 "status": status,
+                "absence_type": absence_type,
                 "check_in": check_in,
                 "check_out": check_out,
                 "overtime_hours": overtime_hours,
                 "notes": notes,
             }
         )
-        messages.success(request, f"Absensi {employee.name} tanggal {att_date} berhasil disimpan.")
+        messages.success(request, f"Absensi {employee.name} tanggal {att_date} ({att.display_status_label}) berhasil disimpan.")
         return redirect(f"/attendance/?date={att_date_str}")
     return redirect("attendance_list")
 
@@ -1819,13 +1859,36 @@ def attendance_create(request):
 def attendance_update(request, uuid):
     att = get_object_or_404(Attendance, uuid=uuid)
     if request.method == "POST":
-        att.status = request.POST.get("status", att.status)
-        att.check_in = request.POST.get("check_in") or None
-        att.check_out = request.POST.get("check_out") or None
-        att.overtime_hours = Decimal(request.POST.get("overtime_hours") or 0)
-        att.notes = request.POST.get("notes", att.notes)
+        status = request.POST.get("status", att.status)
+        absence_type_uuid = request.POST.get("absence_type_uuid", "").strip()
+        check_in = request.POST.get("check_in") or None
+        check_out = request.POST.get("check_out") or None
+        overtime_hours = Decimal(request.POST.get("overtime_hours") or 0)
+        notes = request.POST.get("notes", "").strip()
+
+        if status == "HADIR":
+            att.status = "HADIR"
+            att.absence_type = None
+            att.check_in = check_in
+            att.check_out = check_out
+            att.overtime_hours = overtime_hours
+        else:
+            if absence_type_uuid:
+                att.absence_type = AbsenceType.objects.filter(uuid=absence_type_uuid).first()
+                att.status = "TIDAK_HADIR"
+            elif status in ["IJIN", "SAKIT", "ALPHA"]:
+                att.status = status
+            else:
+                att.status = "TIDAK_HADIR"
+
+            if not att.absence_type or att.absence_type.category != "OFFICIAL_TRAVEL":
+                att.check_in = None
+                att.check_out = None
+                att.overtime_hours = Decimal(0)
+
+        att.notes = notes
         att.save()
-        messages.success(request, f"Absensi {att.employee.name} berhasil diperbarui.")
+        messages.success(request, f"Absensi {att.employee.name} ({att.display_status_label}) berhasil diperbarui.")
     return redirect(f"/attendance/?date={att.date.strftime('%Y-%m-%d')}")
 
 

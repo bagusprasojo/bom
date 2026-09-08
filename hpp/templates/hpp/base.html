@@ -178,6 +178,10 @@
                             <span>&bull;</span>
                             <span>Master Data Karyawan</span>
                         </a>
+                        <a href="{% url 'absence_type_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/absence-types/' in request.path %}text-amber-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Master Jenis Tidak Masuk</span>
+                        </a>
                     </div>
                 </div>
 

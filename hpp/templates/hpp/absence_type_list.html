@@ -1,0 +1,395 @@
+{% extends "hpp/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Master Jenis Tidak Masuk - HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ 
+    addModal: false, 
+    editModal: false, 
+    currentType: {
+        uuid: '',
+        code: '',
+        name: '',
+        category: 'PERMIT',
+        is_paid: false,
+        wage_percentage: 0,
+        color: 'blue',
+        requires_attachment: false,
+        notes: '',
+        is_active: true,
+        usage_count: 0
+    }
+}">
+    <!-- Messages Notification -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-3 rounded-md text-sm font-medium flex items-center justify-between {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            <span>{{ message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                <a href="{% url 'attendance_list' %}" class="text-indigo-600 hover:underline">SDM & Absensi</a>
+                <span>&rsaquo;</span>
+                <span class="text-slate-600 font-semibold">Master Jenis Tidak Masuk</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900">Master Jenis Tidak Masuk Karyawan</h1>
+            <p class="text-sm text-slate-500">Konfigurasi jenis cuti, sakit, izin, dinas luar, dan persentase hak upah harian (*paid / unpaid leave*).</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'attendance_list' %}" class="inline-flex items-center px-3 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200">
+                &larr; Rekap Absensi
+            </a>
+            <button @click="addModal = true" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 shadow">
+                + Tambah Jenis Baru
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Summary -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Jenis Status</span>
+            <div class="text-2xl font-black text-slate-900 mt-1">{{ total_types }}</div>
+            <span class="text-xs text-slate-500">Konfigurasi terdaftar</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">Cuti / Izin Berbayar (Paid)</span>
+            <div class="text-2xl font-black text-emerald-600 mt-1">{{ total_paid }}</div>
+            <span class="text-xs text-slate-500">Karyawan tetap dapat upah</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">Tanpa Upah (Unpaid)</span>
+            <div class="text-2xl font-black text-slate-700 mt-1">{{ total_unpaid }}</div>
+            <span class="text-xs text-slate-500">Upah harian dipotong</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-bold text-indigo-600 uppercase tracking-wider block">Status Aktif</span>
+            <div class="text-2xl font-black text-indigo-700 mt-1">{{ total_active }}</div>
+            <span class="text-xs text-slate-500">Tersedia di input absensi</span>
+        </div>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form method="GET" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div class="sm:col-span-2">
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Cari Kode / Nama / Catatan</label>
+                <input type="text" name="q" value="{{ query }}" placeholder="Contoh: CT, Sakit, Cuti Tahunan..." class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Kategori</label>
+                <select name="category" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="">-- Semua Kategori --</option>
+                    {% for cat_val, cat_label in category_choices %}
+                    <option value="{{ cat_val }}" {% if category_filter == cat_val %}selected{% endif %}>{{ cat_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-end gap-2">
+                <button type="submit" class="flex-1 px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-md hover:bg-slate-700">Cari</button>
+                <a href="{% url 'absence_type_list' %}" class="px-3 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-200">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Table Absence Types -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-left">
+                <tr>
+                    <th class="px-4 py-3">Kode</th>
+                    <th class="px-4 py-3">Nama Jenis & Keterangan</th>
+                    <th class="px-4 py-3">Kategori</th>
+                    <th class="px-4 py-3 text-center">Kebijakan Upah Harian</th>
+                    <th class="px-4 py-3 text-center">Surat / Bukti</th>
+                    <th class="px-4 py-3 text-center">Pemakaian</th>
+                    <th class="px-4 py-3 text-center">Status</th>
+                    <th class="px-4 py-3 text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for item in absence_types %}
+                <tr class="hover:bg-slate-50 transition">
+                    <!-- Kode with colored badge -->
+                    <td class="px-4 py-3 font-mono whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold
+                            {% if item.color == 'purple' %}bg-purple-100 text-purple-800 border border-purple-200
+                            {% elif item.color == 'amber' %}bg-amber-100 text-amber-800 border border-amber-200
+                            {% elif item.color == 'blue' %}bg-blue-100 text-blue-800 border border-blue-200
+                            {% elif item.color == 'indigo' %}bg-indigo-100 text-indigo-800 border border-indigo-200
+                            {% elif item.color == 'rose' %}bg-rose-100 text-rose-800 border border-rose-200
+                            {% else %}bg-slate-100 text-slate-800 border border-slate-200{% endif %}">
+                            {{ item.code }}
+                        </span>
+                    </td>
+
+                    <!-- Nama & Notes -->
+                    <td class="px-4 py-3">
+                        <div class="font-bold text-slate-900">{{ item.name }}</div>
+                        {% if item.notes %}
+                        <p class="text-xs text-slate-500 mt-0.5">{{ item.notes }}</p>
+                        {% endif %}
+                    </td>
+
+                    <!-- Kategori -->
+                    <td class="px-4 py-3 whitespace-nowrap text-xs text-slate-700">
+                        <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                            {{ item.get_category_display }}
+                        </span>
+                    </td>
+
+                    <!-- Hak Upah Harian -->
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        {% if item.is_paid %}
+                        <div class="inline-flex flex-col items-center">
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Berbayar {{ item.wage_percentage|floatformat:0 }}%
+                            </span>
+                            <span class="text-[10px] text-emerald-600 mt-0.5">Upah harian dihitung</span>
+                        </div>
+                        {% else %}
+                        <div class="inline-flex flex-col items-center">
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                Tanpa Upah (0%)
+                            </span>
+                            <span class="text-[10px] text-slate-400 mt-0.5">Unpaid Leave</span>
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Bukti Surat -->
+                    <td class="px-4 py-3 text-center whitespace-nowrap text-xs">
+                        {% if item.requires_attachment %}
+                        <span class="text-amber-700 font-semibold inline-flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                            Wajib Bukti
+                        </span>
+                        {% else %}
+                        <span class="text-slate-400">Opsional</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Pemakaian -->
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        <span class="font-semibold {% if item.usage_count > 0 %}text-indigo-600{% else %}text-slate-400{% endif %}">
+                            {{ item.usage_count }} record
+                        </span>
+                    </td>
+
+                    <!-- Status Aktif -->
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        {% if item.is_active %}
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Aktif</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500">Non-Aktif</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Aksi -->
+                    <td class="px-4 py-3 text-center space-x-1 whitespace-nowrap">
+                        <button @click="currentType = {
+                            uuid: '{{ item.uuid }}',
+                            code: '{{ item.code|escapejs }}',
+                            name: '{{ item.name|escapejs }}',
+                            category: '{{ item.category }}',
+                            is_paid: {% if item.is_paid %}true{% else %}false{% endif %},
+                            wage_percentage: '{{ item.wage_percentage }}',
+                            color: '{{ item.color }}',
+                            requires_attachment: {% if item.requires_attachment %}true{% else %}false{% endif %},
+                            notes: '{{ item.notes|escapejs }}',
+                            is_active: {% if item.is_active %}true{% else %}false{% endif %},
+                            usage_count: {{ item.usage_count }}
+                        }; editModal = true" class="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded hover:bg-slate-200 font-semibold">
+                            Edit
+                        </button>
+                        
+                        {% if item.usage_count > 0 %}
+                        <button @click="alert('Tidak dapat menghapus jenis \'{{ item.name|escapejs }}\' karena telah digunakan oleh {{ item.usage_count }} absensi karyawan! Anda dapat menonaktifkannya melalui tombol Edit.')" class="text-xs text-slate-400 cursor-not-allowed px-1.5 py-1" title="Terkunci: Data sedang digunakan pada absensi">
+                            Hapus
+                        </button>
+                        {% else %}
+                        <form action="{% url 'absence_type_delete' item.uuid %}" method="POST" class="inline" onsubmit="return confirm('Hapus jenis tidak masuk {{ item.name }} ({{ item.code }})?')">
+                            {% csrf_token %}
+                            <button type="submit" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-1.5 py-1">
+                                Hapus
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                        Belum ada jenis tidak masuk yang sesuai filter.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MODAL: Tambah Jenis Baru -->
+    <div x-show="addModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="addModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-900">Tambah Jenis Tidak Masuk Baru</h3>
+                <button @click="addModal = false" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+            <form action="{% url 'absence_type_create' %}" method="POST" class="space-y-4" x-data="{ paidChoice: false, wagePct: 0 }">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kode Singkat *</label>
+                        <input type="text" name="code" required placeholder="Contoh: CT, SKD, DL" maxlength="20" class="w-full rounded border border-slate-300 p-2 text-sm uppercase font-mono focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kategori Utama *</label>
+                        <select name="category" required class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500">
+                            {% for cat_val, cat_label in category_choices %}
+                            <option value="{{ cat_val }}">{{ cat_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Jenis *</label>
+                    <input type="text" name="name" required placeholder="Contoh: Cuti Tahunan, Sakit Surat Dokter, Dinas Lapangan" maxlength="100" class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Warna Badge Visual</label>
+                        <select name="color" class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500">
+                            {% for col_val, col_label in color_choices %}
+                            <option value="{{ col_val }}">{{ col_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Persentase Upah Harian (%)</label>
+                        <input type="number" step="1" min="0" max="100" name="wage_percentage" x-model="wagePct" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold focus:ring-1 focus:ring-indigo-500">
+                        <span class="text-[11px] text-slate-500">100 = Upah penuh, 0 = Tanpa upah</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="is_paid" x-model="paidChoice" @change="if (paidChoice && wagePct == 0) wagePct = 100; else if (!paidChoice) wagePct = 0;" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-xs font-bold text-slate-800">Karyawan Berhak Atas Upah Harian (Paid Leave)</span>
+                    </label>
+                    <p class="text-[11px] text-slate-500 pl-6">Centang jika karyawan tetap menerima upah harian saat tidak masuk dengan status ini.</p>
+
+                    <label class="flex items-center gap-2 cursor-pointer pt-2">
+                        <input type="checkbox" name="requires_attachment" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-xs font-bold text-slate-800">Wajib Lampiran Surat / Bukti Keterangan</span>
+                    </label>
+                    <p class="text-[11px] text-slate-500 pl-6">Contoh: Surat Dokter (SKD) atau Surat Izin Cuti Khusus.</p>
+
+                    <label class="flex items-center gap-2 cursor-pointer pt-2">
+                        <input type="checkbox" name="is_active" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-xs font-bold text-slate-800">Status Aktif (Tampil di Pilihan Absensi)</span>
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan Kebijakan / SOP</label>
+                    <textarea name="notes" rows="2" placeholder="Ketentuan atau syarat yang berlaku..." class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="addModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 shadow">Simpan Jenis Tidak Masuk</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Jenis Tidak Masuk -->
+    <div x-show="editModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div @click.away="editModal = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b pb-3">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Edit Jenis Tidak Masuk</h3>
+                    <p class="text-xs text-slate-500">Kode: <span class="font-mono font-bold text-indigo-600" x-text="currentType.code"></span> &bull; Pemakaian: <span x-text="currentType.usage_count + ' absensi'"></span></p>
+                </div>
+                <button @click="editModal = false" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+            <form :action="'/absence-types/' + currentType.uuid + '/update/'" method="POST" class="space-y-4">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kode Singkat *</label>
+                        <input type="text" name="code" x-model="currentType.code" required maxlength="20" class="w-full rounded border border-slate-300 p-2 text-sm uppercase font-mono focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Kategori Utama *</label>
+                        <select name="category" x-model="currentType.category" required class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500">
+                            {% for cat_val, cat_label in category_choices %}
+                            <option value="{{ cat_val }}">{{ cat_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Jenis *</label>
+                    <input type="text" name="name" x-model="currentType.name" required maxlength="100" class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Warna Badge Visual</label>
+                        <select name="color" x-model="currentType.color" class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500">
+                            {% for col_val, col_label in color_choices %}
+                            <option value="{{ col_val }}">{{ col_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Persentase Upah Harian (%)</label>
+                        <input type="number" step="1" min="0" max="100" name="wage_percentage" x-model="currentType.wage_percentage" class="w-full rounded border border-slate-300 p-2 text-sm font-semibold focus:ring-1 focus:ring-indigo-500">
+                        <span class="text-[11px] text-slate-500">100 = Upah penuh, 0 = Tanpa upah</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="is_paid" x-model="currentType.is_paid" @change="if (currentType.is_paid && currentType.wage_percentage == 0) currentType.wage_percentage = 100; else if (!currentType.is_paid) currentType.wage_percentage = 0;" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-xs font-bold text-slate-800">Karyawan Berhak Atas Upah Harian (Paid Leave)</span>
+                    </label>
+                    <p class="text-[11px] text-slate-500 pl-6">Centang jika status ini berhak menerima upah harian.</p>
+
+                    <label class="flex items-center gap-2 cursor-pointer pt-2">
+                        <input type="checkbox" name="requires_attachment" x-model="currentType.requires_attachment" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-xs font-bold text-slate-800">Wajib Lampiran Surat / Bukti Keterangan</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer pt-2">
+                        <input type="checkbox" name="is_active" x-model="currentType.is_active" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-xs font-bold text-slate-800">Status Aktif (Tampil di Pilihan Absensi)</span>
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Catatan Kebijakan / SOP</label>
+                    <textarea name="notes" rows="2" x-model="currentType.notes" class="w-full rounded border border-slate-300 p-2 text-sm focus:ring-1 focus:ring-indigo-500"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" @click="editModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 shadow">Update Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

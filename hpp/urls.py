@@ -5,6 +5,7 @@ from . import views_customer
 from . import views_raw_material
 from . import views_unit
 from . import views_finished_good
+from . import views_absence_type
 
 urlpatterns = [
     # Project
@@ -126,4 +127,10 @@ urlpatterns = [
     path("work-logs/new/", views.work_log_create, name="work_log_create"),
     path("work-logs/<uuid:uuid>/update/", views.work_log_update, name="work_log_update"),
     path("work-logs/<uuid:uuid>/delete/", views.work_log_delete, name="work_log_delete"),
+
+    # Master Data Jenis Tidak Masuk (Absence Types)
+    path("absence-types/", views_absence_type.absence_type_list, name="absence_type_list"),
+    path("absence-types/new/", views_absence_type.absence_type_create, name="absence_type_create"),
+    path("absence-types/<uuid:uuid>/update/", views_absence_type.absence_type_update, name="absence_type_update"),
+    path("absence-types/<uuid:uuid>/delete/", views_absence_type.absence_type_delete, name="absence_type_delete"),
 ]

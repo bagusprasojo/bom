@@ -767,18 +767,64 @@ class Employee(models.Model):
         return f"[{self.nik}] {self.name} ({self.position})"
 
 
+class AbsenceType(models.Model):
+    """
+    Master Data Jenis Tidak Masuk Karyawan (Cuti, Izin, Sakit, Dinas Luar, Alpha)
+    Mendukung konfigurasi persentase pemotongan/pemberian upah (paid/unpaid leave).
+    """
+    CATEGORY_CHOICES = [
+        ("LEAVE", "Cuti (Leave)"),
+        ("SICK", "Sakit (Sick)"),
+        ("PERMIT", "Izin (Permit)"),
+        ("OFFICIAL_TRAVEL", "Dinas Luar / Tugas Lapangan"),
+        ("ABSENT", "Alpha / Tanpa Keterangan"),
+        ("OTHER", "Lain-lain"),
+    ]
+
+    COLOR_CHOICES = [
+        ("blue", "Biru (Izin/Permit)"),
+        ("amber", "Kuning/Oranye (Sakit)"),
+        ("purple", "Ungu (Cuti/Leave)"),
+        ("indigo", "Indigo (Dinas Luar)"),
+        ("rose", "Merah (Alpha/Mangkir)"),
+        ("slate", "Abu-abu (Lainnya)"),
+    ]
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=100)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default="PERMIT")
+    is_paid = models.BooleanField(default=False, help_text="Apakah karyawan tetap berhak atas upah harian?")
+    wage_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="% upah harian yang dibayarkan (100 = penuh, 50 = separuh, 0 = unpaid)")
+    color = models.CharField(max_length=20, choices=COLOR_CHOICES, default="blue")
+    requires_attachment = models.BooleanField(default=False, help_text="Wajib melampirkan surat/bukti?")
+    notes = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["category", "name"]
+
+    def __str__(self):
+        paid_label = f"Dibayar {self.wage_percentage:g}%" if self.is_paid else "Tanpa Upah"
+        return f"[{self.code}] {self.name} ({paid_label})"
+
+
 class Attendance(models.Model):
     STATUS_CHOICES = [
         ("HADIR", "Hadir / Masuk"),
-        ("IJIN", "Izin"),
-        ("SAKIT", "Sakit"),
-        ("ALPHA", "Alpha / Tanpa Keterangan"),
+        ("TIDAK_HADIR", "Tidak Masuk (Izin/Cuti/Sakit)"),
+        ("IJIN", "Izin (Legacy)"),
+        ("SAKIT", "Sakit (Legacy)"),
+        ("ALPHA", "Alpha (Legacy)"),
     ]
 
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="attendances")
+    absence_type = models.ForeignKey(AbsenceType, on_delete=models.SET_NULL, null=True, blank=True, related_name="attendances")
     date = models.DateField()
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="HADIR")
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default="HADIR")
     check_in = models.TimeField(null=True, blank=True)
     check_out = models.TimeField(null=True, blank=True)
     overtime_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -791,17 +837,40 @@ class Attendance(models.Model):
         ordering = ["-date", "employee__name"]
         unique_together = ("employee", "date")
 
+    @property
+    def display_status_label(self):
+        if self.status == "HADIR":
+            return "Hadir / Masuk"
+        if self.absence_type:
+            return self.absence_type.name
+        return self.get_status_display()
+
+    @property
+    def badge_color(self):
+        if self.status == "HADIR":
+            return "emerald"
+        if self.absence_type:
+            return self.absence_type.color
+        if self.status == "IJIN":
+            return "blue"
+        if self.status == "SAKIT":
+            return "amber"
+        return "rose"
+
     def save(self, *args, **kwargs):
         if self.status == "HADIR":
             base_wage = self.employee.daily_rate
             ot_wage = self.overtime_hours * self.employee.overtime_rate_per_hour
             self.wage = base_wage + ot_wage
+        elif self.absence_type:
+            pct = (self.absence_type.wage_percentage or Decimal(0)) / Decimal(100)
+            self.wage = self.employee.daily_rate * pct
         else:
             self.wage = Decimal(0)
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.date} - {self.employee.name} ({self.get_status_display()})"
+        return f"{self.date} - {self.employee.name} ({self.display_status_label})"
 
 
 class EmployeeWorkLog(models.Model):
