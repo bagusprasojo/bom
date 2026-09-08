@@ -1,0 +1,249 @@
+{% extends "hpp/base.html" %}
+
+{% block title %}User Journey & Panduan Alur - HPP & Manufaktur{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ 
+    activeTab: 'lifecycle',
+    copied: false,
+    copyMarkdown() {
+        const text = document.getElementById('rawMarkdownContent').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            this.copied = true;
+            setTimeout(() => this.copied = false, 2500);
+        });
+    }
+}">
+
+    <!-- HERO HEADER -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
+        <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute right-40 top-0 w-48 h-48 bg-sky-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div class="space-y-2 max-w-2xl">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-semibold border border-indigo-400/30">
+                    <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                    <span>Peta Alur Operasional & Dokumentasi Sistem</span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                    Panduan Alur Pengguna (User Journey)
+                </h1>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Pelajari siklus hidup menyeluruh (*end-to-end*) sistem manufaktur: mulai dari estimasi HPP di tahap Draft, 
+                    eksekusi lapangan & realisasi stok, hingga closing proyek dan pengelolaan modul-modul pendukung.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                <a href="{% url 'project_create' %}" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    <span>Buat Proyek Baru</span>
+                </a>
+                <button type="button" @click="copyMarkdown()" class="px-4 py-2.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold rounded-xl transition flex items-center gap-2">
+                    <svg x-show="!copied" class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                    <svg x-show="copied" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span x-text="copied ? 'Tersalin ke Clipboard!' : 'Salin File USER_JOURNEY.md'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- QUICK TAB NAV -->
+        <div class="flex items-center gap-2 mt-6 pt-5 border-t border-slate-800/80 text-xs overflow-x-auto pb-1">
+            <button @click="activeTab = 'lifecycle'" 
+                    :class="activeTab === 'lifecycle' ? 'bg-indigo-600 text-white font-bold shadow-md' : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'"
+                    class="px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap">
+                <span>🔄</span>
+                <span>Siklus Utama Proyek (9 Langkah)</span>
+            </button>
+            <button @click="activeTab = 'modules'" 
+                    :class="activeTab === 'modules' ? 'bg-indigo-600 text-white font-bold shadow-md' : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'"
+                    class="px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap">
+                <span>🧩</span>
+                <span>Modul Pendukung & Matriks Peran</span>
+            </button>
+            <button @click="activeTab = 'markdown'" 
+                    :class="activeTab === 'markdown' ? 'bg-indigo-600 text-white font-bold shadow-md' : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'"
+                    class="px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap">
+                <span>📄</span>
+                <span>Dokumen Lengkap (.MD)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- TAB 1: SIKLUS UTAMA PROYEK (9 LANGKAH) -->
+    <div x-show="activeTab === 'lifecycle'" class="space-y-6">
+        <div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">💡</span>
+                <p class="text-xs text-indigo-900 leading-relaxed font-medium">
+                    Setiap proyek manufaktur melewati <strong>3 fase besar</strong>: 
+                    <span class="font-bold text-indigo-700">Perancangan & Anggaran (Langkah 1-5)</span> &rarr; 
+                    <span class="font-bold text-blue-700">Eksekusi & Kontrol Realisasi (Langkah 6-7)</span> &rarr; 
+                    <span class="font-bold text-emerald-700">Closing & Audit Stok (Langkah 8-9)</span>.
+                </p>
+            </div>
+            <a href="{% url 'project_list' %}" class="shrink-0 text-xs font-bold text-indigo-600 hover:text-indigo-800 underline">
+                Buka Daftar Proyek &rarr;
+            </a>
+        </div>
+
+        <!-- TIMELINE STEPPER -->
+        <div class="grid grid-cols-1 gap-4">
+            {% for s in journey_steps %}
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden group">
+                <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-600 group-hover:bg-indigo-500 transition-colors"></div>
+
+                <div class="flex items-start gap-4 pl-2">
+                    <!-- Step Number Badge -->
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex flex-col items-center justify-center shrink-0 shadow-inner">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Step</span>
+                        <span class="text-base font-black leading-none">{{ s.step }}</span>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-full border {{ s.badge_color }}">
+                                {{ s.badge }}
+                            </span>
+                            <span class="text-xs text-slate-400 font-medium flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                <span>Aktor: <strong class="text-slate-700">{{ s.actor }}</strong></span>
+                            </span>
+                        </div>
+
+                        <h3 class="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                            {{ s.title }}
+                        </h3>
+
+                        <p class="text-xs text-slate-600 max-w-2xl leading-relaxed">
+                            {{ s.summary }}
+                        </p>
+
+                        <!-- Pro Tip -->
+                        <div class="flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50/70 border border-amber-200/80 px-2.5 py-1 rounded-lg mt-2 w-fit">
+                            <span class="font-bold">Tips:</span>
+                            <span>{{ s.tips }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0 self-end md:self-center pl-2 md:pl-0">
+                    <a href="{% url s.url_name %}" class="px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-300 text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5">
+                        <span>{{ s.url_label }}</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- TAB 2: MODUL PENDUKUNG & MATRIKS PERAN -->
+    <div x-show="activeTab === 'modules'" class="space-y-6" style="display: none;">
+        
+        <!-- KARTU MODUL PENDUKUNG -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {% for mod in supporting_modules %}
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ mod.category }}</span>
+                        <span class="text-[11px] font-bold px-2 py-0.5 rounded-full border {{ mod.badge_color }}">
+                            {{ mod.badge }}
+                        </span>
+                    </div>
+
+                    <h3 class="text-sm font-bold text-slate-900 leading-snug">
+                        {{ mod.title }}
+                    </h3>
+
+                    <div class="space-y-2.5 pt-1">
+                        {% for item in mod.items %}
+                        <a href="{% url item.url_name %}" class="block p-2.5 rounded-xl bg-slate-50 hover:bg-indigo-50/70 border border-slate-100 hover:border-indigo-200 transition group">
+                            <div class="flex items-center justify-between text-xs font-bold text-slate-800 group-hover:text-indigo-700">
+                                <span>{{ item.name }}</span>
+                                <svg class="w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mt-0.5 leading-normal">
+                                {{ item.desc }}
+                            </p>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- MATRIKS PERAN PENGGUNA (ROLE MATRIX) -->
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">👥</span>
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900">Matriks Peran & Wewenang Pengguna</h2>
+                        <p class="text-xs text-slate-500">Distribusi tanggung jawab operasional pada sistem manufaktur dan HPP.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-xs">
+                    <thead class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                        <tr>
+                            <th class="px-4 py-3 text-left w-48">Peran Pengguna</th>
+                            <th class="px-4 py-3 text-left">Tanggung Jawab Utama</th>
+                            <th class="px-4 py-3 text-left w-64">Menu Kunci</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for r in role_matrix %}
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="px-4 py-3.5 font-bold text-slate-900 align-top">
+                                <span class="bg-slate-100 text-slate-800 px-2 py-1 rounded-md border border-slate-200 font-mono">
+                                    {{ r.role }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3.5 text-slate-600 leading-relaxed align-top">
+                                {{ r.tasks }}
+                            </td>
+                            <td class="px-4 py-3.5 text-slate-700 align-top">
+                                <div class="flex flex-wrap gap-1">
+                                    {% for m in r.menus %}
+                                    <span class="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded border border-indigo-100">
+                                        {{ m }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: DOKUMEN MARKDOWN ASLI (USER_JOURNEY.MD) -->
+    <div x-show="activeTab === 'markdown'" class="space-y-4" style="display: none;">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 bg-slate-100 text-slate-700 rounded-lg font-mono font-bold text-xs">MD</span>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">File Sumber: USER_JOURNEY.md</h3>
+                        <p class="text-[11px] text-slate-500">Tersedia langsung di root direktori project untuk dibaca di editor teks atau repository.</p>
+                    </div>
+                </div>
+                <button type="button" @click="copyMarkdown()" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg transition flex items-center gap-1.5">
+                    <span x-text="copied ? '✓ Berhasil Disalin' : '📋 Salin Isi File'"></span>
+                </button>
+            </div>
+
+            <pre id="rawMarkdownContent" class="bg-slate-900 text-slate-200 p-5 rounded-xl font-mono text-xs overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed border border-slate-800 whitespace-pre-wrap">{{ md_content }}</pre>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

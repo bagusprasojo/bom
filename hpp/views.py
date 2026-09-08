@@ -1,3 +1,6 @@
+import os
+import json
+from django.conf import settings
 from .utils import generate_project_code, get_ordered_bom
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
@@ -7,7 +10,6 @@ from django.contrib import messages
 from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime
-import json
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -2955,3 +2957,209 @@ def attendance_export_excel(request):
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
+
+
+# =========================================================================
+# USER JOURNEY & PANDUAN APLIKASI
+# =========================================================================
+def user_journey(request):
+    """
+    Menampilkan panduan alur pengguna (User Journey) end-to-end:
+    - Dari perancangan proyek hingga closing proyek
+    - Modul-modul pendukung (Master Data, SDM, Pergudangan)
+    - Matriks peran pengguna
+    - Pratinjau dokumen USER_JOURNEY.md asli
+    """
+    md_file_path = os.path.join(settings.BASE_DIR, "USER_JOURNEY.md")
+    md_content = ""
+    if os.path.exists(md_file_path):
+        try:
+            with open(md_file_path, "r", encoding="utf-8") as f:
+                md_content = f.read()
+        except Exception:
+            md_content = "File panduan tidak dapat dimuat."
+
+    journey_steps = [
+        {
+            "step": 1,
+            "title": "Inisiasi & Pembuatan Proyek Baru",
+            "actor": "Sales / Project Manager",
+            "badge": "Draft",
+            "badge_color": "bg-slate-100 text-slate-700 border-slate-300",
+            "icon": "M12 4v16m8-8H4",
+            "summary": "Membuat proyek dengan mengisi kode proyek, nama pesanan, customer, jadwal target, dan nilai kontrak.",
+            "url_name": "project_create",
+            "url_label": "Buka Form Buat Proyek",
+            "tips": "Proyek draft yang belum memiliki transaksi realisasi dapat dihapus kapan saja dengan aman."
+        },
+        {
+            "step": 2,
+            "title": "Perancangan Resep BOM & Sub-Assembly",
+            "actor": "Estimator / Engineer",
+            "badge": "BOM Tree",
+            "badge_color": "bg-indigo-50 text-indigo-700 border-indigo-200",
+            "icon": "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10",
+            "summary": "Menyusun struktur bahan mentah dan sub-assembly bertingkat. Gunakan fitur 'Salin BOM' untuk pesanan berulang.",
+            "url_name": "project_list",
+            "url_label": "Buka Daftar Proyek & BOM",
+            "tips": "Fitur 'Salin BOM dari Proyek Lain' mendukung pengali kuantitas otomatis dan menjaga pohon perakitan tetap utuh."
+        },
+        {
+            "step": 3,
+            "title": "Perancangan Anggaran Tenaga Kerja",
+            "actor": "Project Manager",
+            "badge": "Labor Budget",
+            "badge_color": "bg-amber-50 text-amber-700 border-amber-200",
+            "icon": "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z",
+            "summary": "Menetapkan alokasi tukang/teknisi berdasarkan Master Tenaga Kerja beserta estimasi jam/hari dan tarif standar.",
+            "url_name": "project_list",
+            "url_label": "Buka Anggaran Labor",
+            "tips": "Tarif standar dari Master Tenaga Kerja otomatis terisi saat role dipilih."
+        },
+        {
+            "step": 4,
+            "title": "Perancangan Biaya Overhead Pabrik",
+            "actor": "Estimator / Keuangan",
+            "badge": "Overhead",
+            "badge_color": "bg-purple-50 text-purple-700 border-purple-200",
+            "icon": "M13 10V3L4 14h7v7l9-11h-7z",
+            "summary": "Menghitung beban listrik, sewa alat pabrik, logistik ekspedisi, jasa maklon, dan konsumsi proyek.",
+            "url_name": "project_list",
+            "url_label": "Buka Anggaran Overhead",
+            "tips": "Tersedia preset cepat pos biaya overhead umum untuk mempercepat entri."
+        },
+        {
+            "step": 5,
+            "title": "Penetapan Target Barang Jadi",
+            "actor": "Estimator / Gudang",
+            "badge": "Finished Goods",
+            "badge_color": "bg-emerald-50 text-emerald-700 border-emerald-200",
+            "icon": "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+            "summary": "Menautkan target produk fisik akhir yang akan dihasilkan ke Master Barang Jadi.",
+            "url_name": "finished_good_list",
+            "url_label": "Buka Master Barang Jadi",
+            "tips": "Penautan ini mempermudah rilis stok otomatis saat proyek selesai."
+        },
+        {
+            "step": 6,
+            "title": "Eksekusi Lapangan & Pencatatan Realisasi",
+            "actor": "Supervisor / Mandor Lapangan",
+            "badge": "In Progress",
+            "badge_color": "bg-blue-50 text-blue-700 border-blue-200",
+            "icon": "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
+            "summary": "Ubah status ke In Progress. Catat pengeluaran bahan baku (otomatis potong stok gudang), realisasi tenaga kerja (dari log kinerja harian), dan overhead riil.",
+            "url_name": "project_realization_list",
+            "url_label": "Buka Realisasi Proyek",
+            "tips": "Log kinerja harian karyawan di menu Log Kinerja dapat langsung di-posting ke realisasi proyek."
+        },
+        {
+            "step": 7,
+            "title": "Monitoring Real-Time & Deviasi Margin",
+            "actor": "Project Manager / Direksi",
+            "badge": "Live HPP & Margin",
+            "badge_color": "bg-cyan-50 text-cyan-700 border-cyan-200",
+            "icon": "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+            "summary": "Memantau perbandingan Estimasi HPP vs Realisasi HPP, deviasi selisih biaya aktual, progress fisik (%), dan margin gross profit riil.",
+            "url_name": "project_list",
+            "url_label": "Pantau Dashboard Proyek",
+            "tips": "Indikator warna merah otomatis muncul jika realisasi biaya melebihi estimasi rancangan."
+        },
+        {
+            "step": 8,
+            "title": "Closing Proyek & Rilis Stok Gudang",
+            "actor": "Project Manager & Kepala Gudang",
+            "badge": "Completed",
+            "badge_color": "bg-emerald-100 text-emerald-800 border-emerald-300",
+            "icon": "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+            "summary": "Progres 100%. Jalankan Closing Proyek untuk menambah stok barang jadi secara resmi ke gudang dan mengunci data HPP untuk kepatuhan audit.",
+            "url_name": "project_list",
+            "url_label": "Buka Detail untuk Closing",
+            "tips": "Stok barang jadi otomatis bertambah di gudang dan tercatat pada buku kartu stok."
+        },
+        {
+            "step": 9,
+            "title": "Berita Acara (BAP) & Opsi Reopen",
+            "actor": "Admin / QC / Direksi",
+            "badge": "BAP Resmi",
+            "badge_color": "bg-indigo-50 text-indigo-700 border-indigo-200",
+            "icon": "M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z",
+            "summary": "Cetak dokumen resmi Berita Acara Penyelesaian (BAP) bertanda tangan. Bila ada audit, proyek dapat dibuka kembali (reopen) dengan rollback stok otomatis.",
+            "url_name": "project_list",
+            "url_label": "Lihat Dokumen BAP",
+            "tips": "Rollback stok otomatis mencegah ketidakcocokan saldo barang jadi jika proyek dibuka kembali."
+        }
+    ]
+
+    supporting_modules = [
+        {
+            "category": "Master Data",
+            "title": "Master Customer, Satuan, Bahan & Barang Jadi",
+            "badge": "Fondasi Data",
+            "badge_color": "bg-indigo-50 text-indigo-700 border-indigo-200",
+            "items": [
+                {"name": "Master Customer", "url_name": "customer_list", "desc": "Data klien & modal riwayat seluruh proyek yang pernah dipesan."},
+                {"name": "Master Satuan", "url_name": "unit_list", "desc": "Standarisasi 4 kategori satuan (Bahan, Tenaga Kerja, Barang Jadi, Overhead)."},
+                {"name": "Master Bahan Baku", "url_name": "raw_material_list", "desc": "Katalog material, konversi multi-satuan, harga beli terakhir, dan batas minimum stok."},
+                {"name": "Master Barang Jadi", "url_name": "finished_good_list", "desc": "Katalog produk siap jual, SKU, harga standar, dan saldo fisik gudang."}
+            ]
+        },
+        {
+            "category": "SDM & Tenaga Kerja",
+            "title": "Karyawan, Presensi Harian & Log Kinerja Lapangan",
+            "badge": "Tenaga Kerja",
+            "badge_color": "bg-amber-50 text-amber-700 border-amber-200",
+            "items": [
+                {"name": "Log Kinerja & Kegiatan", "url_name": "work_log_list", "desc": "Pencatatan aktivitas harian karyawan & posting langsung ke realisasi proyek."},
+                {"name": "Rekap Absensi Harian", "url_name": "attendance_list", "desc": "Presensi kerja harian, status kehadiran, dan ekspor spreadsheet Excel."},
+                {"name": "Master Data Karyawan", "url_name": "employee_list", "desc": "Data profil tukang & staf dengan proteksi penghapusan berbasis log kerja."},
+                {"name": "Master Jenis Tidak Masuk", "url_name": "absence_type_list", "desc": "Pengaturan kode & kategori ketidakhadiran (Sakit, Izin, Cuti, dll)."}
+            ]
+        },
+        {
+            "category": "Pergudangan & Mutasi",
+            "title": "Penerimaan, Pengeluaran & Kartu Stok Otomatis",
+            "badge": "Logistik",
+            "badge_color": "bg-teal-50 text-teal-700 border-teal-200",
+            "items": [
+                {"name": "Mutasi Bahan Baku", "url_name": "raw_material_stock_mutation_list", "desc": "Pencatatan mutasi masuk (pembelian) dan keluar (ke lantai produksi proyek)."},
+                {"name": "Kartu Stok Bahan", "url_name": "raw_material_stock_card_index", "desc": "Buku jurnal historis saldo pergerakan bahan secara kronologis."},
+                {"name": "Mutasi Barang Jadi", "url_name": "finished_good_mutation_list", "desc": "Penerimaan hasil closing proyek dan pengeluaran penjualan pelanggan."},
+                {"name": "Kartu Stok Barang Jadi", "url_name": "finished_good_stock_card_index", "desc": "Jurnal mutasi persediaan barang jadi siap distribusi."}
+            ]
+        }
+    ]
+
+    role_matrix = [
+        {
+            "role": "Sales & Estimator",
+            "tasks": "Membuat proyek baru, menginput nilai kontrak, merancang estimasi BOM bertingkat, anggaran labor, overhead, dan menggunakan fitur Salin BOM untuk penawaran cepat.",
+            "menus": ["Buat Project Baru", "Detail Project", "Master Customer"]
+        },
+        {
+            "role": "Supervisor Produksi / Mandor",
+            "tasks": "Memperbarui progress fisik proyek (%), mengawasi catatan log kinerja harian tim, memposting log kerja ke realisasi proyek, dan mengajukan bahan ke gudang.",
+            "menus": ["Log Kinerja", "Realisasi Project", "Rekap Absensi"]
+        },
+        {
+            "role": "Petugas Gudang (Storekeeper)",
+            "tasks": "Mencatat penerimaan bahan dari supplier, pengeluaran bahan ke lantai pabrik, stock opname fisik vs sistem, serta menerima rilis barang jadi hasil closing.",
+            "menus": ["Daftar Bahan Baku", "Mutasi Bahan", "Kartu Stok", "Barang Jadi"]
+        },
+        {
+            "role": "HRD & Personalia",
+            "tasks": "Mengelola data induk karyawan & tarif upah, memvalidasi presensi harian serta jenis ketidakhadiran, dan mengekspor rekapitulasi absensi bulanan ke Excel.",
+            "menus": ["Master Karyawan", "Rekap Absensi", "Master Jenis Tidak Masuk"]
+        },
+        {
+            "role": "Project Manager & Direksi",
+            "tasks": "Memonitor deviasi biaya riil vs HPP dan gross profit margin proyek, mengeksekusi Closing Proyek & rilis persediaan, serta mencetak dokumen Berita Acara (BAP).",
+            "menus": ["Daftar Project & HPP", "Realisasi Project", "Cetak BAP"]
+        }
+    ]
+
+    return render(request, "hpp/user_journey.html", {
+        "md_content": md_content,
+        "journey_steps": journey_steps,
+        "supporting_modules": supporting_modules,
+        "role_matrix": role_matrix,
+    })

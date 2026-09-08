@@ -139,4 +139,7 @@ urlpatterns = [
     path("absence-types/new/", views_absence_type.absence_type_create, name="absence_type_create"),
     path("absence-types/<uuid:uuid>/update/", views_absence_type.absence_type_update, name="absence_type_update"),
     path("absence-types/<uuid:uuid>/delete/", views_absence_type.absence_type_delete, name="absence_type_delete"),
+
+    # User Journey & Panduan Aplikasi
+    path("user-journey/", views.user_journey, name="user_journey"),
 ]
