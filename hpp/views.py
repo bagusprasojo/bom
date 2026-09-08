@@ -3027,6 +3027,18 @@ def user_journey(request):
         },
         {
             "step": 4,
+            "title": "Alokasi Barang Jadi sebagai Item Penyusun Proyek",
+            "actor": "Estimator / Engineer / Gudang",
+            "badge": "Finished Goods Item",
+            "badge_color": "bg-emerald-50 text-emerald-700 border-emerald-200",
+            "icon": "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+            "summary": "Memasukkan komponen barang jadi dari gudang yang dipasang/dipakai dalam pengerjaan proyek (misal: modul jadi, aksesoris pabrikan, unit siap pasang).",
+            "url_name": "project_list",
+            "url_label": "Buka Alokasi Barang Jadi",
+            "tips": "Sistem secara instan menampilkan sisa stok fisik di gudang agar estimator dapat memastikan ketersediaan barang sebelum perakitan."
+        },
+        {
+            "step": 5,
             "title": "Perancangan Biaya Overhead Pabrik",
             "actor": "Estimator / Keuangan",
             "badge": "Overhead",
@@ -3038,52 +3050,40 @@ def user_journey(request):
             "tips": "Tersedia preset cepat pos biaya overhead umum untuk mempercepat entri."
         },
         {
-            "step": 5,
-            "title": "Penetapan Target Barang Jadi",
-            "actor": "Estimator / Gudang",
-            "badge": "Finished Goods",
-            "badge_color": "bg-emerald-50 text-emerald-700 border-emerald-200",
-            "icon": "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
-            "summary": "Menautkan target produk fisik akhir yang akan dihasilkan ke Master Barang Jadi.",
-            "url_name": "finished_good_list",
-            "url_label": "Buka Master Barang Jadi",
-            "tips": "Penautan ini mempermudah rilis stok otomatis saat proyek selesai."
-        },
-        {
             "step": 6,
-            "title": "Eksekusi Lapangan & Pencatatan Realisasi",
+            "title": "Eksekusi Lapangan & Realisasi 4 Pilar Biaya",
             "actor": "Supervisor / Mandor Lapangan",
             "badge": "In Progress",
             "badge_color": "bg-blue-50 text-blue-700 border-blue-200",
             "icon": "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
-            "summary": "Ubah status ke In Progress. Catat pengeluaran bahan baku (otomatis potong stok gudang), realisasi tenaga kerja (dari log kinerja harian), dan overhead riil.",
+            "summary": "Ubah status ke In Progress. Catat pengeluaran bahan baku (potong stok bahan), tenaga kerja (posting log kerja), pemakaian barang jadi pendukung (potong stok barang jadi gudang), dan overhead riil.",
             "url_name": "project_realization_list",
             "url_label": "Buka Realisasi Proyek",
-            "tips": "Log kinerja harian karyawan di menu Log Kinerja dapat langsung di-posting ke realisasi proyek."
+            "tips": "Realisasi pemakaian barang jadi otomatis memotong persediaan gudang (Mutasi OUT) dan tervalidasi terhadap saldo stok fisik."
         },
         {
             "step": 7,
-            "title": "Monitoring Real-Time & Deviasi Margin",
+            "title": "Monitoring Real-Time & Deviasi Margin 4 Pilar",
             "actor": "Project Manager / Direksi",
             "badge": "Live HPP & Margin",
             "badge_color": "bg-cyan-50 text-cyan-700 border-cyan-200",
             "icon": "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
-            "summary": "Memantau perbandingan Estimasi HPP vs Realisasi HPP, deviasi selisih biaya aktual, progress fisik (%), dan margin gross profit riil.",
+            "summary": "Memantau perbandingan Estimasi HPP vs Realisasi HPP pada 4 pilar (Material, Tenaga Kerja, Barang Jadi, Overhead), progress fisik (%), dan margin gross profit riil.",
             "url_name": "project_list",
             "url_label": "Pantau Dashboard Proyek",
             "tips": "Indikator warna merah otomatis muncul jika realisasi biaya melebihi estimasi rancangan."
         },
         {
             "step": 8,
-            "title": "Closing Proyek & Rilis Stok Gudang",
+            "title": "Closing Proyek & Penguncian Audit",
             "actor": "Project Manager & Kepala Gudang",
             "badge": "Completed",
-            "badge_color": "bg-emerald-100 text-emerald-800 border-emerald-300",
-            "icon": "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
-            "summary": "Progres 100%. Jalankan Closing Proyek untuk menambah stok barang jadi secara resmi ke gudang dan mengunci data HPP untuk kepatuhan audit.",
+            "badge_color": "bg-emerald-50 text-emerald-700 border-emerald-200",
+            "icon": "M5 13l4 4L19 7",
+            "summary": "Saat pengerjaan 100% tuntas, lakukan Closing Project. Data HPP dikunci permanen. Jika proyek menghasilkan output fisik untuk stok gudang, centang opsi rilis barang jadi.",
             "url_name": "project_list",
-            "url_label": "Buka Detail untuk Closing",
-            "tips": "Stok barang jadi otomatis bertambah di gudang dan tercatat pada buku kartu stok."
+            "url_label": "Buka Menu Penutupan",
+            "tips": "Penguncian audit menjamin data HPP dan kuitansi realisasi tidak dapat diubah lagi."
         },
         {
             "step": 9,
@@ -3172,4 +3172,221 @@ def user_journey(request):
         "journey_steps": journey_steps,
         "supporting_modules": supporting_modules,
         "role_matrix": role_matrix,
+    })
+
+
+def app_advantages(request):
+    """
+    Halaman khusus dokumentasi dan visualisasi interaktif Keunggulan & Nilai Strategis Aplikasi
+    Berdasarkan isi file KEUNGGULAN_APLIKASI.md
+    """
+    advantages_file_path = os.path.join(settings.BASE_DIR, "KEUNGGULAN_APLIKASI.md")
+    advantages_md = ""
+    if os.path.exists(advantages_file_path):
+        try:
+            with open(advantages_file_path, "r", encoding="utf-8") as f:
+                advantages_md = f.read()
+        except Exception:
+            advantages_md = "File keunggulan aplikasi tidak dapat dimuat."
+
+    advantages_list = [
+        {
+            "num": 1,
+            "title": "Standard Costing vs Actual Costing",
+            "tag": "Presisi Finansial",
+            "tag_color": "bg-blue-50 text-blue-700 border-blue-200",
+            "icon": "M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z",
+            "problem": "Estimasi penawaran harga dibuat di spreadsheet, sedangkan pengeluaran riil dicatat terpisah. Manajemen baru sadar rugi setelah proyek rampung.",
+            "solution": "Penyandingan berdampingan Estimasi HPP vs Realisasi HPP Riil secara real-time dengan kalkulasi deviasi biaya per komponen dan indikator warna peringatan dini (overbudget warning).",
+            "impact": "Mencegah kebocoran anggaran dan kepastian gross profit margin sejak hari pertama pengerjaan."
+        },
+        {
+            "num": 2,
+            "title": "Hierarchical BOM & Multi-Level Sub-Assembly",
+            "tag": "Struktur Perakitan",
+            "tag_color": "bg-indigo-50 text-indigo-700 border-indigo-200",
+            "icon": "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10",
+            "problem": "Sistem konvensional hanya mendukung daftar datar (flat BOM), tidak mampu menggambarkan perakitan bertingkat kompleks.",
+            "solution": "Mendukung struktur pohon perakitan berjenjang (parent-child tree) tanpa batas level, membedakan jelas antara Material Mentah (stok gudang) vs Sub-Assembly rakitan internal.",
+            "impact": "Engineer dan lantai produksi memahami urutan modul rakitan dengan visual indentasi yang jernih."
+        },
+        {
+            "num": 3,
+            "title": "Salin BOM Proyek dengan Faktor Multiplier",
+            "tag": "Efisiensi 70%",
+            "tag_color": "bg-emerald-50 text-emerald-700 border-emerald-200",
+            "icon": "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z",
+            "problem": "Menginput ulang puluhan resep material untuk pesanan serupa memakan waktu lama dan rawan kesalahan hitung.",
+            "solution": "Duplikasi 1-klik seluruh resep BOM, anggaran labor, overhead, dan barang jadi dari proyek masa lalu dengan dukungan faktor pengali kuantitas (multiplier Qty) serta integritas pohon rakitan terjaga utuh.",
+            "impact": "Membuat proposal penawaran harga 70% lebih cepat dengan akurasi teruji dari histori proyek sebelumnya."
+        },
+        {
+            "num": 4,
+            "title": "Jembatan Mandor-Kantor: Log Kinerja ke Realisasi",
+            "tag": "Integrasi Lapangan",
+            "tag_color": "bg-amber-50 text-amber-700 border-amber-200",
+            "icon": "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
+            "problem": "Jam kerja tukang/mandor dicatat di secarik kertas, menyulitkan kantor mengalokasikan upah riil ke nomor proyek yang tepat.",
+            "solution": "Pencatatan aktivitas fisik harian (jam mulai-selesai, volume output kerja) dengan fitur 1-klik posting langsung menjadi biaya riil tenaga kerja proyek tujuan.",
+            "impact": "Biaya upah teralokasi akurat ke masing-masing proyek tanpa input manual ganda di pembukuan."
+        },
+        {
+            "num": 5,
+            "title": "Otomasi Gudang & Pemotongan Stok Terpadu",
+            "tag": "Sinkronisasi Persediaan",
+            "tag_color": "bg-teal-50 text-teal-700 border-teal-200",
+            "icon": "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+            "problem": "Stok fisik di gudang kerap selisih dengan pembukuan karena pemakaian bahan maupun barang jadi di proyek tidak langsung memotong stok.",
+            "solution": "Setiap pemakaian bahan baku mentah (Realisasi BOM) maupun barang jadi pendukung yang dipasang ke proyek (Realisasi Barang Jadi) otomatis memotong saldo persediaan gudang secara real-time. Dilengkapi validasi stok fisik dan kartu stok otomatis.",
+            "impact": "Meniadakan selisih stok fisik vs sistem, mencegah minus fiktif, dan mengontrol pemakaian komponen proyek secara transparan."
+        },
+        {
+            "num": 6,
+            "title": "Dukungan Multi-Satuan Konversi Presisi",
+            "tag": "Fleksibilitas Satuan",
+            "tag_color": "bg-purple-50 text-purple-700 border-purple-200",
+            "icon": "M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4",
+            "problem": "Bahan dibeli dalam satuan besar (Dus, Roll, Drum), namun dipakai di lantai produksi dalam satuan kecil (Pcs, Meter, Kg).",
+            "solution": "Konfigurasi rasio konversi satuan beli ke satuan pakai secara otomatis menghitung nilai HPP per unit tanpa pembulatan liar.",
+            "impact": "Eliminasi kesalahan hitung biaya material akibat perbedaan satuan logistik vs satuan perakitan."
+        },
+        {
+            "num": 7,
+            "title": "Penguncian Audit (Audit Lock) & Berita Acara BAP",
+            "tag": "Integritas & Akuntabilitas",
+            "tag_color": "bg-rose-50 text-rose-700 border-rose-200",
+            "icon": "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
+            "problem": "Proyek yang sudah selesai rawan diubah diam-diam oleh oknum, merusak laporan keuangan bulanan.",
+            "solution": "Saat status proyek Completed, seluruh data HPP dikunci permanen (read-only), sistem mencetak BAP resmi dengan tanda tangan 3 pihak, dan mekanisme reopen audit wajib mengisi alasan serta melakukan rollback stok otomatis.",
+            "impact": "Data keuangan aman untuk audit eksternal/internal dan mencegah manipulasi angka HPP."
+        },
+        {
+            "num": 8,
+            "title": "Keamanan Data & Safeguard Transaksi Ketat",
+            "tag": "Proteksi Sistem",
+            "tag_color": "bg-sky-50 text-sky-700 border-sky-200",
+            "icon": "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+            "problem": "Data proyek penting atau karyawan terhapus secara sengaja maupun tidak sengaja oleh pengguna.",
+            "solution": "Safeguard tingkat ganda: tolak hapus proyek berjalan/bermutasi (hanya draft bersih), tolak hapus karyawan yang punya log kinerja, dan semua form aksi destruktif diproteksi HTTP POST + token CSRF.",
+            "impact": "Ketenangan operasional tanpa resiko kehilangan riwayat transaksi penting."
+        },
+        {
+            "num": 9,
+            "title": "Master Customer Interaktif & Riwayat Portofolio",
+            "tag": "Customer Insight",
+            "tag_color": "bg-violet-50 text-violet-700 border-violet-200",
+            "icon": "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z",
+            "problem": "Melihat histori pesanan seorang klien biasanya memerlukan pencarian manual di banyak tabel laporan.",
+            "solution": "Tombol badge interaktif di Master Customer membuka modal riwayat portofolio lengkap: status kemajuan proyek, target tanggal selesai, akumulasi nilai kontrak Rupiah, dan akses cepat ke detail proyek.",
+            "impact": "Membantu tim penjualan memahami profil nilai pelanggan setia dalam sekali klik."
+        },
+        {
+            "num": 10,
+            "title": "Antarmuka Reaktif & Performa Cepat",
+            "tag": "Pengalaman Pengguna",
+            "tag_color": "bg-cyan-50 text-cyan-700 border-cyan-200",
+            "icon": "M13 10V3L4 14h7v7l9-11h-7z",
+            "problem": "Software ERP enterprise konvensional lambat, kaku, dan memerlukan reload halaman penuh setiap kali memilih dropdown.",
+            "solution": "Integrasi backend Django dengan arsitektur frontend Alpine.js & Tailwind CSS: autocomplete combobox cepat, modal pop-up instan, dan kalkulasi dinamis tanpa putus koneksi.",
+            "impact": "Pengguna nyaman bekerja cepat berjam-jam tanpa kendala antarmuka berat atau lagging."
+        }
+    ]
+
+    comparison_table = [
+        {
+            "parameter": "Kecepatan Implementasi",
+            "excel": "Cepat di awal, cepat berantakan",
+            "erp": "Sangat lama (3 - 12 bulan implementasi)",
+            "our_app": "Sangat cepat, langsung siap pakai"
+        },
+        {
+            "parameter": "Konektivitas Lapangan",
+            "excel": "Tidak ada (harus salin manual)",
+            "erp": "Kaku & lisensi per pengguna mahal",
+            "our_app": "Mudah diakses via browser oleh mandor"
+        },
+        {
+            "parameter": "Pohon Sub-Assembly",
+            "excel": "Rumit dibuat dengan rumus sel",
+            "erp": "Ada, tapi konfigurasi sangat rumit",
+            "our_app": "Intuitif, visual, & mendukung kloning"
+        },
+        {
+            "parameter": "Otomasi Pemotongan Stok",
+            "excel": "Manual (rawan selisih kuantitas)",
+            "erp": "Ada (modul persediaan terpisah)",
+            "our_app": "Otomatis terpotong saat realisasi BOM"
+        },
+        {
+            "parameter": "Log Kinerja ke Realisasi",
+            "excel": "Tidak terhubung",
+            "erp": "Butuh modifikasi custom berbayar",
+            "our_app": "Terintegrasi langsung (1-Click Post)"
+        },
+        {
+            "parameter": "Penguncian Audit (Closing)",
+            "excel": "Tidak ada proteksi sel yang aman",
+            "erp": "Ada",
+            "our_app": "Otomatis dikunci saat closing + BAP cetak"
+        },
+        {
+            "parameter": "Biaya Kepemilikan (TCO)",
+            "excel": "Murah di awal, mahal di kesalahan",
+            "erp": "Sangat mahal (biaya server & konsultan)",
+            "our_app": "Sangat efisien dan terjangkau"
+        }
+    ]
+
+    stakeholder_benefits = [
+        {
+            "role": "Pemilik Bisnis & Direksi",
+            "badge": "Strategic Level",
+            "badge_color": "bg-indigo-50 text-indigo-700 border-indigo-200",
+            "icon": "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+            "benefits": [
+                "Kepastian Margin Keuntungan Riil: Mengetahui profit bersih sebelum serah terima proyek.",
+                "Pencegahan Kebocoran Biaya: Peringatan dini sebelum pengeluaran melampaui anggaran rancangan.",
+                "Dokumen BAP Sah: Dokumen resmi siap cetak untuk lampiran penagihan termin ke customer."
+            ]
+        },
+        {
+            "role": "Project Manager & Estimator",
+            "badge": "Management Level",
+            "badge_color": "bg-blue-50 text-blue-700 border-blue-200",
+            "icon": "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
+            "benefits": [
+                "Kontrol Anggaran Real-Time: Monitoring deviasi biaya bahan baku, upah kerja, dan overhead.",
+                "Fitur Kloning Proyek Cepat: Memangkas waktu pembuatan penawaran HPP hingga 70%.",
+                "Kepastian Alur Perakitan: Visual pohon sub-assembly memastikan komponen terpasang urut."
+            ]
+        },
+        {
+            "role": "Mandor Lapangan & Tim Produksi",
+            "badge": "Operational Level",
+            "badge_color": "bg-amber-50 text-amber-700 border-amber-200",
+            "icon": "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z",
+            "benefits": [
+                "Pencatatan Kerja Praktis: Log kegiatan harian dapat diisi mandor via browser tanpa formulir kertas.",
+                "Pengakuan Hasil Kerja Nyata: Catatan kegiatan harian langsung diakui sebagai realisasi proyek.",
+                "Kepastian Alokasi Bahan: Mengetahui target pemakaian bahan dari resep BOM sebelum pabrikasi."
+            ]
+        },
+        {
+            "role": "Bagian Gudang & Keuangan",
+            "badge": "Logistics & Finance",
+            "badge_color": "bg-teal-50 text-teal-700 border-teal-200",
+            "icon": "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z",
+            "benefits": [
+                "Stok Bahan Akurat: Pemotongan otomatis persediaan saat realisasi pemakaian di lantai produksi.",
+                "Kartu Stok Transparan: Histori pergerakan barang terlacak kronologis lengkap nomor proyek.",
+                "Ekspor Spreadsheet Excel: Rekap absensi dan mutasi dapat diunduh instan untuk rekapitulasi gaji/pembukuan."
+            ]
+        }
+    ]
+
+    return render(request, "hpp/app_advantages.html", {
+        "advantages_md": advantages_md,
+        "advantages_list": advantages_list,
+        "comparison_table": comparison_table,
+        "stakeholder_benefits": stakeholder_benefits,
     })

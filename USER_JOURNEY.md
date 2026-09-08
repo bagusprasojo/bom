@@ -12,30 +12,30 @@ flowchart TD
     subgraph SIKLUS_UTAMA [Siklus Utama Proyek Manufaktur]
         A([1. Inisiasi Proyek Baru]) -->|Status: Draft| B[2. Rancang Resep BOM & Sub-Assembly]
         B --> C[3. Rancang Anggaran Tenaga Kerja]
-        C --> D[4. Rancang Anggaran Biaya Overhead]
-        D --> E[5. Tentukan Target Barang Jadi]
+        C --> D[4. Alokasikan Barang Jadi Penyusun Proyek]
+        D --> E[5. Rancang Anggaran Biaya Overhead]
         E -->|Ubah Status ke In Progress| F[6. Pelaksanaan & Catat Realisasi Lapangan]
         
-        F --> F1[Realisasi Bahan Baku & Potong Stok Gudang]
-        F --> F2[Realisasi Tenaga Kerja & Log Kinerja Karyawan]
-        F --> F3[Realisasi Overhead Faktual]
-        F --> F4[Realisasi Barang Jadi Parsial]
+        F --> F1[Realisasi Bahan Baku & Potong Stok Bahan]
+        F --> F2[Realisasi Tenaga Kerja & Posting Log Kinerja]
+        F --> F3[Realisasi Pemakaian Barang Jadi & Potong Stok FG]
+        F --> F4[Realisasi Biaya Overhead Faktual]
         
-        F1 & F2 & F3 & F4 --> G[7. Monitoring Real-Time & Deviasi Margin]
-        G -->|Progres Selesai 100%| H{8. Closing Proyek}
-        H -->|Simpan ke Gudang| H1[Otomatis Tambah Stok Barang Jadi]
-        H -->|Data Dikunci| I[9. Cetak Dokumen BAP Resmi]
-        I -.->|Bila Ada Koreksi/Audit| J[Buka Kembali / Reopen Proyek]
+        F1 & F2 & F3 & F4 --> G[7. Monitoring Real-Time & Deviasi Margin 4 Pilar]
+        G -->|Progres Selesai 100%| H{8. Closing Proyek & Penguncian Audit}
+        H -->|Opsi Simpan Hasil ke Gudang| H1[Otomatis Tambah Stok Barang Jadi]
+        H -->|Data HPP Dikunci Permanen| I[9. Cetak Dokumen BAP Resmi]
+        I -.->|Bila Ada Koreksi/Audit Khusus| J[Buka Kembali / Reopen Proyek]
     end
 
     subgraph MODUL_PENDUKUNG [Modul Pendukung Operasional]
         M1[(Master Satuan)] -.-> B & F1 & F2
         M2[(Master Customer)] -.-> A
         M3[(Master Bahan Baku & Multi-Satuan)] -.-> B & F1
-        M4[(Master Barang Jadi)] -.-> E & H1
+        M4[(Master Barang Jadi)] -.-> D & F3 & H1
         M5[(Master Tenaga Kerja / Role)] -.-> C & F2
         M6[(SDM: Karyawan & Presensi)] -.-> F2
-        M7[(Pergudangan & Kartu Stok)] -.-> F1 & H1
+        M7[(Pergudangan & Kartu Stok)] -.-> F1 & F3 & H1
     end
 ```
 
@@ -100,7 +100,23 @@ Alur ini dijalankan untuk setiap pesanan manufaktur, *custom fabrication*, atau 
 
 ---
 
-### Tahap 4: Perancangan Biaya Overhead Pabrik (*Factory Overhead*)
+### Tahap 4: Pengalokasian Barang Jadi sebagai Item Penyusun Proyek (*Finished Goods as Components*)
+* **Menu**: Halaman `Detail Project` -> Tab `Barang Jadi`
+* **Aktor**: *Estimator / Production Engineer / Admin Gudang*
+* **Konsep & Peran Komponen**:
+  Dalam industri manufaktur, fabrikasi interior, maupun perakitan mesin khusus, sebuah proyek sering kali tidak hanya merakit bahan baku mentah dari nol, melainkan juga **menggunakan atau memasang produk jadi yang sudah ada di gudang** sebagai salah satu komponen penyusun proyek (misalnya: modul kabinet standar, wastafel siap pakai, exhaust fan, engsel pabrikan, unit pompa jadi, dsb.).
+* **Langkah-langkah**:
+  1. Klik tombol **`+ Tambah Barang Jadi`**.
+  2. Pilih produk dari **Master Barang Jadi**. Sistem secara instan menampilkan **Stock Tersedia** di gudang (`current_stock`) agar estimator dapat memastikan ketersediaan barang sebelum perakitan berjalan.
+  3. Masukkan **Estimasi Kebutuhan (`est_qty`)** dan **Estimasi Harga Satuan (`est_unit_cost`)** (otomatis default ke *standard cost* barang jadi).
+  4. Sistem menghitung subtotal biaya barang jadi:
+     $$\text{Subtotal Barang Jadi} = \text{Est. Kebutuhan} \times \text{Est. Harga Satuan}$$
+  5. Nilai ini menjadi salah satu dari **4 pilar biaya penyusun HPP proyek**:
+     $$\text{Total HPP Estimasi} = \text{Bahan Baku (BOM)} + \text{Tenaga Kerja (Labor)} + \textbf{Barang Jadi Pendukung} + \text{Overhead}$$
+
+---
+
+### Tahap 5: Perancangan Biaya Overhead Pabrik (*Factory Overhead*)
 * **Menu**: Halaman `Detail Project` -> Tab `Biaya Overhead`
 * **Aktor**: *Estimator / Bagian Keuangan*
 * **Langkah-langkah**:
@@ -110,65 +126,56 @@ Alur ini dijalankan untuk setiap pesanan manufaktur, *custom fabrication*, atau 
 
 ---
 
-### Tahap 5: Pemetaan Barang Jadi Terkait (*Finished Goods Linking*)
-* **Menu**: Halaman `Detail Project` -> Tab `Barang Jadi`
-* **Aktor**: *Estimator / Admin Gudang*
-* **Langkah-langkah**:
-  1. Tautkan jenis barang jadi yang akan dihasilkan dari proyek ini ke **Master Barang Jadi**.
-  2. Tentukan target kuantitas output fisik yang diharapkan masuk gudang saat proyek selesai.
-
----
-
-### Tahap 6: Eksekusi Produksi & Pencatatan Realisasi Lapangan
+### Tahap 6: Eksekusi Produksi & Pencatatan Realisasi Lapangan (4 Pilar)
 * **Menu**: `Project & HPP` -> `Realisasi Project` (`/projects/<uuid>/realization/`) atau via menu `Log Kinerja`
 * **Aktor**: *Supervisor Lapangan, Mandor, Storekeeper*
 * **Langkah-langkah**:
   1. **Ubah Status Proyek**: Melalui tombol **Edit Status / Info**, ubah status proyek menjadi **`Sedang Dikerjakan (In Progress)`**.
-  2. **Pencatatan Pengeluaran Bahan Baku**:
-     - Di tab *Realisasi BOM*, klik **`+ Catat Realisasi Bahan`**.
-     - Masukkan tanggal, jumlah pemakaian riil, dan harga faktual.
-     - Jika bahan baku terhubung ke gudang persediaan, sistem otomatis memotong kuantitas stok bahan pada database dan mencatat riwayat ke **Kartu Stok Bahan Baku**.
-  3. **Pencatatan Realisasi Tenaga Kerja**:
+  2. **Pencatatan Realisasi Bahan Baku (Tab Realisasi BOM)**:
+     - Klik **`+ Catat Realisasi Bahan`**, masukkan tanggal, jumlah pemakaian riil, dan harga faktual.
+     - Jika bahan baku terhubung ke gudang persediaan, sistem otomatis memotong kuantitas stok bahan pada database dan mencatat ke **Kartu Stok Bahan Baku**.
+  3. **Pencatatan Realisasi Tenaga Kerja (Tab Realisasi Labor)**:
      - *Metode A (Otomatis dari Log Kinerja Harian)*: Pekerja/mandor menginput kegiatan harian di menu `Log Kinerja`. Supervisor memverifikasi log tersebut lalu menekan tombol **Posting ke Realisasi Proyek** (dengan opsi memasangkan ke item labor rancangan).
      - *Metode B (Input Langsung)*: Di tab *Realisasi Labor*, klik **`+ Catat Realisasi Tenaga Kerja`**, masukkan tanggal, karyawan pelaksana, kuantitas hari/jam, dan upah riil yang dibayarkan.
-  4. **Pencatatan Biaya Overhead Faktual**:
+  4. **Pencatatan Realisasi Pemakaian Barang Jadi (Tab Realisasi Barang Jadi)**:
+     - Mandor atau bagian perakitan mencatat barang jadi yang **diambil dari gudang persediaan untuk dipasang ke dalam pengerjaan proyek**.
+     - Klik **`+ Catat Realisasi Barang Jadi`**, pilih item barang jadi dan masukkan jumlah unit riil yang dipakai.
+     - **Validasi Ketersediaan Stok Gudang**: Sistem memvalidasi saldo gudang. Jika stok tidak mencukupi, sistem menolak transaksi dengan notifikasi peringatan.
+     - Saat disimpan, sistem **otomatis memotong saldo fisik persediaan barang jadi di gudang (Mutasi OUT)** dan mencatat riwayat ke **Kartu Stok Barang Jadi**.
+  5. **Pencatatan Biaya Overhead Faktual (Tab Realisasi Overhead)**:
      - Masukkan tagihan riil listrik, kuitansi sewa alat, atau biaya transportasi yang terjadi selama masa pengerjaan di tab *Realisasi Overhead*.
-  5. **Pencatatan Output Barang Jadi Parsial**:
-     - Catat unit yang sudah selesai dirakit di lapangan pada tab *Realisasi Barang Jadi*.
 
 ---
 
-### Tahap 7: Monitoring Real-Time & Analisis Deviasi Margin
+### Tahap 7: Monitoring Real-Time & Analisis Deviasi Margin (4 Pilar Biaya)
 * **Menu**: Header kartu statistik di `Detail Proyek` & `Realisasi Proyek`
 * **Aktor**: *Project Manager, Cost Controller, Direksi*
 * **Metrik Kunci yang Dipantau**:
-  - **Estimasi HPP vs Realisasi HPP**: Membandingkan total biaya perancangan vs realisasi berjalan.
-  - **Deviasi Biaya (Variance)**: Selisih biaya aktual terhadap anggaran (merah jika *overbudget*, hijau jika efisien).
+  - **Estimasi HPP vs Realisasi HPP (4 Pos Biaya)**: Membandingkan total biaya perancangan vs realisasi berjalan secara komprehensif pada Material, Tenaga Kerja, Barang Jadi, dan Overhead.
+  - **Deviasi Biaya (Cost Variance)**: Selisih biaya aktual terhadap anggaran per masing-masing pos biaya (merah jika *overbudget*, hijau jika efisien).
   - **Estimasi Gross Margin (%) vs Realisasi Gross Margin (%)**:
     $$\text{Margin Riil (\%)} = \frac{\text{Nilai Kontrak} - \text{Realisasi HPP}}{\text{Nilai Kontrak}} \times 100\%$$
-  - **Progress Fisik (%)**: Persentase kemajuan fisik produksi yang diperbarui mandor/PM.
+  - **Progress Fisik (%)**: Persentase kemajuan fisik produksi yang diperbarui mandor/PM seiring berjalannya proyek.
 
 ---
 
-### Tahap 8: Closing Proyek & Rilis Stok Gudang
+### Tahap 8: Closing Proyek & Penguncian Audit
 * **Menu**: Tombol hijau **Closing Project** di header `Detail Proyek`
 * **Aktor**: *Project Manager & Kepala Gudang*
 * **Kriteria Sebelum Closing**:
   - Seluruh pekerjaan manufaktur di pabrik telah selesai 100%.
-  - Seluruh nota pengeluaran bahan dan upah tenaga kerja telah dibukukan.
+  - Seluruh nota pengeluaran bahan, pemakaian barang jadi, dan upah tenaga kerja telah dibukukan.
 * **Langkah-langkah Closing**:
   1. Klik tombol **`Closing Project`**.
   2. Pada modal konfirmasi:
      - Konfirmasi status penyelesaian 100%.
-     - Centang opsi **"Rilis Stok Barang Jadi ke Gudang"** jika hasil produksi akan disimpan ke persediaan gudang.
-     - Pilih Barang Jadi penerima dan masukkan kuantitas unit yang selesai.
-     - Masukkan catatan serah terima / berita acara.
+     - **Opsi Serah Terima Hasil ke Gudang**: Jika proyek ini menghasilkan barang jadi baru untuk disimpan ke gudang (misal produksi massal atau batch stock siap jual), centang opsi **"Rilis Stok Barang Jadi ke Gudang"**, pilih SKU penerima dan kuantitas unit yang selesai.
+     - Masukkan catatan serah terima / berita acara penutupan.
   3. Klik **Konfirmasi & Tutup Proyek**.
 * **Efek Sistem Otomatis**:
   - Status proyek berubah menjadi **`Selesai (Completed)`** dan progress dikunci pada **100%**.
-  - Kuantitas fisik pada master Barang Jadi otomatis bertambah (**Mutasi IN**).
-  - Kartu stok barang jadi otomatis mencatat penerimaan produksi resmi (`PROD-PRJ-XXXX`).
-  - **Seluruh data HPP dan transaksi realisasi dikunci secara permanen** untuk menjaga integritas audit pembukuan.
+  - Jika opsi rilis stok dicentang, kuantitas barang jadi baru otomatis masuk ke gudang (**Mutasi IN**) dan dicatat pada buku kartu stok.
+  - **Seluruh data HPP dan transaksi realisasi dikunci secara permanen (*read-only*)** untuk kepatuhan audit pembukuan.
 
 ---
 

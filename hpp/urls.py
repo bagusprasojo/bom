@@ -142,4 +142,8 @@ urlpatterns = [
 
     # User Journey & Panduan Aplikasi
     path("user-journey/", views.user_journey, name="user_journey"),
+
+    # Keunggulan & Nilai Strategis Aplikasi
+    path("keunggulan/", views.app_advantages, name="app_advantages"),
 ]
+

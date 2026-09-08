@@ -51,12 +51,13 @@ Dengan memadukan modul **Perancangan Resep BOM Bertingkat**, **Pencatatan Log Ki
 
 ---
 
-### 5. Otomasi Gudang Terpadu & Pengurangan Stok Otomatis
-* **Masalah Umum**: Petugas gudang dan tim proyek sering tidak sinkron, menyebabkan saldo fisik bahan baku di gudang berbeda dengan catatan sistem.
+### 5. Otomasi Gudang Terpadu & Pemotongan Stok Dua Arah
+* **Masalah Umum**: Petugas gudang dan tim proyek sering tidak sinkron, menyebabkan saldo fisik persediaan di gudang berbeda dengan catatan sistem.
 * **Solusi Aplikasi**:
-  - Setiap pencatatan pemakaian bahan di lantai produksi (**Realisasi BOM**) otomatis memotong kuantitas persediaan di database gudang.
-  - Saat proyek selesai (**Closing Proyek**), kuantitas barang jadi otomatis ditambahkan ke persediaan gudang (**Mutasi IN**).
-  - **Buku Kartu Stok Otomatis**: Melacak histori keluar-masuk setiap material dengan referensi nomor proyek secara transparan.
+  - **Pemotongan Stok Otomatis (Mutasi OUT)**: Setiap pemakaian bahan baku (**Realisasi BOM**) maupun pemakaian barang jadi pendukung yang dipasang ke proyek (**Realisasi Barang Jadi**) langsung memotong saldo persediaan gudang secara *real-time*.
+  - **Validasi Stok Fisik**: Sistem memvalidasi ketersediaan stok sebelum mencatat realisasi pemakaian untuk mencegah saldo minus fiktif.
+  - **Penambahan Stok Hasil Proyek (Mutasi IN)**: Saat proyek selesai (*Closing Proyek*), tersedia opsi otomatis untuk memasukkan output fisik barang jadi ke gudang.
+  - **Buku Kartu Stok Kronologis Otomatis**: Melacak histori keluar-masuk setiap material dan barang jadi lengkap dengan referensi nomor proyek secara transparan.
 
 ---
 

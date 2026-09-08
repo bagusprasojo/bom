@@ -96,7 +96,8 @@ def run_tests():
     
     # Check that journey steps are rendered
     assert "Inisiasi" in html and "Pembuatan Proyek Baru" in html
-    assert "Closing Proyek" in html and "Rilis Stok Gudang" in html
+    assert "Alokasi Barang Jadi" in html or "Barang Jadi" in html
+    assert "Closing Proyek" in html
     assert "Berita Acara (BAP)" in html or "Berita Acara" in html
     print("PASS: user_journey view rendered successfully with 200 OK and all components present.")
 
