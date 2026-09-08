@@ -19,7 +19,7 @@ from .models import (
     Project, BOMItem, ProjectLabor, ProjectOverhead,
     MaterialMaster, LaborMaster, FinishedGood,
     ProjectFinishedGood, FinishedGoodStockMutation,
-    RawMaterial
+    RawMaterial, LaborRealization
 )
 
 
@@ -1961,16 +1961,31 @@ def employee_delete(request, uuid):
 # =========================================================================
 # KINERJA KARYAWAN (WORK LOGS) VIEWS
 # =========================================================================
+STANDARD_ACTIVITY_CATEGORIES = [
+    "Fabrikasi & Pemotongan Kayu / Besi",
+    "Perakitan & Konstruksi (Assembly)",
+    "Finishing, Dempul & Pengamplasan",
+    "Pengecatan / Coating / Melamik",
+    "Pemasangan Hardware & Aksesoris",
+    "Packing & Quality Control (QC)",
+    "Pemasangan di Lokasi Proyek (Site Installation)",
+    "Maintenance & Pemeliharaan Alat",
+    "Pekerjaan Umum / Workshop",
+]
+
+
 def work_log_list(request):
     """
     Daftar Log Kinerja & Kegiatan Harian Karyawan
+    Dilengkapi filter proyek, pencarian, indikator presensi, dan konversi ke realisasi HPP.
     """
     selected_date_str = request.GET.get("date", "").strip()
     emp_uuid = request.GET.get("employee", "").strip()
+    proj_uuid = request.GET.get("project", "").strip()
     status_filter = request.GET.get("status", "").strip()
     query = request.GET.get("q", "").strip()
 
-    logs = EmployeeWorkLog.objects.all().select_related("employee", "project")
+    logs = EmployeeWorkLog.objects.all().select_related("employee", "project", "labor_realization")
 
     if selected_date_str:
         try:
@@ -1982,6 +1997,9 @@ def work_log_list(request):
     if emp_uuid:
         logs = logs.filter(employee__uuid=emp_uuid)
 
+    if proj_uuid:
+        logs = logs.filter(project__uuid=proj_uuid)
+
     if status_filter:
         logs = logs.filter(status=status_filter)
 
@@ -1990,26 +2008,60 @@ def work_log_list(request):
             Q(task_description__icontains=query) |
             Q(activity_category__icontains=query) |
             Q(employee__name__icontains=query) |
-            Q(project__name__icontains=query)
+            Q(employee__nik__icontains=query) |
+            Q(project__name__icontains=query) |
+            Q(project__code__icontains=query) |
+            Q(obstacles__icontains=query)
         )
 
     employees = Employee.objects.filter(is_active=True).order_by("name")
     projects = Project.objects.all().order_by("-created_at")
+    projects_data = []
+    for p in projects:
+        projects_data.append({
+            "uuid": str(p.uuid),
+            "code": p.code,
+            "name": p.name,
+            "status": p.status,
+            "status_display": p.get_status_display(),
+            "customer": p.customer_name or (p.customer.name if p.customer else ""),
+            "label": f"[{p.code}] {p.name}",
+            "is_completed": p.status == "completed",
+        })
+    projects_json = json.dumps(projects_data)
 
     total_logs = logs.count()
     total_hours = sum(l.hours_spent for l in logs)
     completed_count = logs.filter(status="completed").count()
 
+    # Pre-fetch attendance for all (employee_id, date) pairs in logs to avoid N+1 queries
+    log_emp_ids = set(l.employee_id for l in logs)
+    log_dates = set(l.date for l in logs)
+    attendance_map = {}
+    if log_emp_ids and log_dates:
+        attendances = Attendance.objects.filter(
+            employee_id__in=log_emp_ids,
+            date__in=log_dates
+        ).select_related("absence_type")
+        for att in attendances:
+            attendance_map[(att.employee_id, att.date)] = att
+
+    for l in logs:
+        l.attendance = attendance_map.get((l.employee_id, l.date))
+
     return render(request, "hpp/work_log_list.html", {
         "logs": logs,
         "employees": employees,
         "projects": projects,
+        "projects_json": projects_json,
         "selected_date": selected_date_str,
         "selected_emp": emp_uuid,
+        "selected_proj": proj_uuid,
         "selected_status": status_filter,
         "query": query,
         "status_choices": EmployeeWorkLog.STATUS_CHOICES,
         "rating_choices": EmployeeWorkLog.RATING_CHOICES,
+        "standard_categories": STANDARD_ACTIVITY_CATEGORIES,
         "total_logs": total_logs,
         "total_hours": total_hours,
         "completed_count": completed_count,
@@ -2021,7 +2073,7 @@ def work_log_create(request):
         emp_uuid = request.POST.get("employee_uuid")
         proj_uuid = request.POST.get("project_uuid") or None
         date_str = request.POST.get("date") or str(date.today())
-        activity_category = request.POST.get("activity_category", "Produksi / Fabrikasi").strip()
+        activity_category = request.POST.get("activity_category", "Fabrikasi & Produksi").strip()
         task_description = request.POST.get("task_description", "").strip()
         output_qty = Decimal(request.POST.get("output_qty") or 0)
         output_unit = request.POST.get("output_unit", "unit").strip()
@@ -2033,6 +2085,16 @@ def work_log_create(request):
         employee = get_object_or_404(Employee, uuid=emp_uuid)
         project = Project.objects.filter(uuid=proj_uuid).first() if proj_uuid else None
         log_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+
+        # Cross-validation with Attendance
+        att = Attendance.objects.filter(employee=employee, date=log_date).select_related("absence_type").first()
+        if att and att.status != "HADIR":
+            status_label = att.display_status_label
+            messages.warning(
+                request,
+                f"Pemberitahuan Presensi: Karyawan {employee.name} tercatat '{status_label}' "
+                f"pada tanggal {log_date}. Log kegiatan tetap disimpan sebagai catatan operasional."
+            )
 
         EmployeeWorkLog.objects.create(
             employee=employee,
@@ -2066,6 +2128,15 @@ def work_log_update(request, uuid):
         log.status = request.POST.get("status", log.status)
         log.obstacles = request.POST.get("obstacles", log.obstacles).strip()
         log.supervisor_rating = int(request.POST.get("supervisor_rating") or log.supervisor_rating)
+
+        # Cross-validation with Attendance
+        att = Attendance.objects.filter(employee=log.employee, date=log.date).select_related("absence_type").first()
+        if att and att.status != "HADIR":
+            messages.warning(
+                request,
+                f"Pemberitahuan Presensi: Karyawan {log.employee.name} tercatat '{att.display_status_label}' pada tanggal {log.date}."
+            )
+
         log.save()
         messages.success(request, f"Log kegiatan {log.employee.name} berhasil diperbarui.")
     return redirect("work_log_list")
@@ -2074,9 +2145,226 @@ def work_log_update(request, uuid):
 def work_log_delete(request, uuid):
     log = get_object_or_404(EmployeeWorkLog, uuid=uuid)
     if request.method == "POST":
+        # If linked to labor realization, delete realization as well or warn
+        if log.labor_realization:
+            if log.project and log.project.status == "completed":
+                messages.error(request, f"Proyek '{log.project.name}' sudah selesai (Terkunci). Log tidak dapat dihapus.")
+                return redirect("work_log_list")
+            log.labor_realization.delete()
+
         log.delete()
         messages.success(request, f"Log kegiatan berhasil dihapus.")
     return redirect("work_log_list")
+
+
+@transaction.atomic
+def work_log_post_to_realization(request, uuid):
+    """
+    Posting Jam Kerja dari Log Kinerja ke Realisasi Biaya Tenaga Kerja Proyek HPP
+    """
+    log = get_object_or_404(EmployeeWorkLog, uuid=uuid)
+    if request.method == "POST":
+        if not log.project:
+            messages.error(request, "Log kinerja tidak dapat dikonversi ke HPP karena tidak terhubung ke proyek manapun.")
+            return redirect("work_log_list")
+
+        if log.project.status == "completed":
+            messages.error(request, f"Proyek '{log.project.name}' sudah berstatus Selesai (Audit Locked). Penambahan realisasi biaya ditolak.")
+            return redirect("work_log_list")
+
+        if log.labor_realization:
+            messages.warning(request, f"Log kinerja ini sudah pernah dikonversi ke Realisasi Tenaga Kerja Proyek ({log.project.code}).")
+            return redirect("work_log_list")
+
+        custom_rate_str = request.POST.get("rate", "").strip()
+        if custom_rate_str:
+            try:
+                rate = Decimal(custom_rate_str)
+            except Exception:
+                rate = log.suggested_hourly_rate
+        else:
+            rate = log.suggested_hourly_rate
+
+        role_name = request.POST.get("role_name", "").strip() or f"{log.employee.position} ({log.employee.name})"
+        is_additional = request.POST.get("is_additional") == "on" or request.POST.get("is_additional") == "true"
+        notes = request.POST.get("notes", "").strip() or f"Auto-post dari Log Kinerja: {log.task_description[:80]}"
+
+        realization = LaborRealization.objects.create(
+            project=log.project,
+            date=log.date,
+            role_name=role_name,
+            unit="jam",
+            quantity=log.hours_spent,
+            rate=rate,
+            is_additional=is_additional,
+            notes=notes,
+        )
+
+        log.labor_realization = realization
+        log.save(update_fields=["labor_realization"])
+
+        messages.success(
+            request,
+            f"Log kinerja {log.employee.name} berhasil diposting ke Realisasi Tenaga Kerja Proyek "
+            f"'{log.project.name}' (Biaya: Rp {realization.total_cost:,.0f})."
+        )
+    return redirect("work_log_list")
+
+
+@transaction.atomic
+def work_log_unpost_from_realization(request, uuid):
+    """
+    Batalkan Konversi Log Kinerja dari Realisasi Tenaga Kerja Proyek
+    """
+    log = get_object_or_404(EmployeeWorkLog, uuid=uuid)
+    if request.method == "POST":
+        if not log.labor_realization:
+            messages.info(request, "Log kinerja ini tidak sedang terhubung ke realisasi biaya proyek.")
+            return redirect("work_log_list")
+
+        if log.project and log.project.status == "completed":
+            messages.error(request, f"Proyek '{log.project.name}' sudah selesai (Audit Locked). Realisasi tidak dapat dibatalkan.")
+            return redirect("work_log_list")
+
+        realization = log.labor_realization
+        log.labor_realization = None
+        log.save(update_fields=["labor_realization"])
+        realization.delete()
+
+        messages.success(request, f"Realisasi tenaga kerja proyek untuk log {log.employee.name} berhasil dibatalkan.")
+    return redirect("work_log_list")
+
+
+def work_log_export_excel(request):
+    """
+    Export Log Kinerja & Kegiatan Karyawan ke Format Excel (.xlsx)
+    """
+    selected_date_str = request.GET.get("date", "").strip()
+    emp_uuid = request.GET.get("employee", "").strip()
+    proj_uuid = request.GET.get("project", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+    query = request.GET.get("q", "").strip()
+
+    logs = EmployeeWorkLog.objects.all().select_related("employee", "project", "labor_realization")
+
+    if selected_date_str:
+        try:
+            filter_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+            logs = logs.filter(date=filter_date)
+        except ValueError:
+            pass
+
+    if emp_uuid:
+        logs = logs.filter(employee__uuid=emp_uuid)
+
+    if proj_uuid:
+        logs = logs.filter(project__uuid=proj_uuid)
+
+    if status_filter:
+        logs = logs.filter(status=status_filter)
+
+    if query:
+        logs = logs.filter(
+            Q(task_description__icontains=query) |
+            Q(activity_category__icontains=query) |
+            Q(employee__name__icontains=query) |
+            Q(employee__nik__icontains=query) |
+            Q(project__name__icontains=query) |
+            Q(project__code__icontains=query) |
+            Q(obstacles__icontains=query)
+        )
+
+    logs = logs.order_by("-date", "employee__name")
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Log Kinerja SDM"
+
+    title_font = Font(name="Calibri", size=14, bold=True, color="0F172A")
+    subtitle_font = Font(name="Calibri", size=10, italic=True, color="64748B")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    regular_font = Font(name="Calibri", size=10)
+    bold_font = Font(name="Calibri", size=10, bold=True)
+    thin_side = Side(border_style="thin", color="CBD5E1")
+    thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    ws["A1"] = "LAPORAN LOG KINERJA & KEGIATAN KARYAWAN"
+    ws["A1"].font = title_font
+    ws["A2"] = f"Dicetak pada: {timezone.now().strftime('%d/%m/%Y %H:%M:%S')} | Total Catatan: {logs.count()}"
+    ws["A2"].font = subtitle_font
+
+    headers = [
+        "No", "Tanggal", "NIK", "Nama Karyawan", "Posisi",
+        "Proyek Terkait", "Kategori Aktivitas", "Deskripsi Pekerjaan",
+        "Output Qty", "Satuan", "Durasi (Jam)", "Status",
+        "Rating Mandor", "Kendala Lapangan", "Status HPP Proyek"
+    ]
+
+    for col_num, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col_num, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    row_idx = 5
+    total_hours = Decimal(0)
+    for idx, l in enumerate(logs, 1):
+        total_hours += l.hours_spent
+        proj_str = f"[{l.project.code}] {l.project.name}" if l.project else "Non-Project / Workshop"
+        hpp_status = f"Terkonversi (Rp {l.labor_realization.total_cost:,.0f})" if l.labor_realization else ("Tersedia" if l.project else "-")
+
+        ws.cell(row=row_idx, column=1, value=idx).alignment = Alignment(horizontal="center")
+        ws.cell(row=row_idx, column=2, value=l.date.strftime("%d/%m/%Y")).alignment = Alignment(horizontal="center")
+        ws.cell(row=row_idx, column=3, value=l.employee.nik).alignment = Alignment(horizontal="center")
+        ws.cell(row=row_idx, column=4, value=l.employee.name)
+        ws.cell(row=row_idx, column=5, value=l.employee.position)
+        ws.cell(row=row_idx, column=6, value=proj_str)
+        ws.cell(row=row_idx, column=7, value=l.activity_category)
+        ws.cell(row=row_idx, column=8, value=l.task_description)
+        ws.cell(row=row_idx, column=9, value=float(l.output_qty)).alignment = Alignment(horizontal="right")
+        ws.cell(row=row_idx, column=10, value=l.output_unit).alignment = Alignment(horizontal="center")
+        ws.cell(row=row_idx, column=11, value=float(l.hours_spent)).alignment = Alignment(horizontal="right")
+        ws.cell(row=row_idx, column=12, value=l.get_status_display()).alignment = Alignment(horizontal="center")
+        ws.cell(row=row_idx, column=13, value=f"{l.supervisor_rating}/5").alignment = Alignment(horizontal="center")
+        ws.cell(row=row_idx, column=14, value=l.obstacles or "-")
+        ws.cell(row=row_idx, column=15, value=hpp_status).alignment = Alignment(horizontal="center")
+
+        for col_num in range(1, 16):
+            c = ws.cell(row=row_idx, column=col_num)
+            c.font = regular_font
+            c.border = thin_border
+
+        row_idx += 1
+
+    ws.cell(row=row_idx, column=1, value="TOTAL JAM KERJA")
+    ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=10)
+    ws.cell(row=row_idx, column=1).font = bold_font
+    ws.cell(row=row_idx, column=1).alignment = Alignment(horizontal="right")
+
+    tot_cell = ws.cell(row=row_idx, column=11, value=float(total_hours))
+    tot_cell.font = bold_font
+    tot_cell.alignment = Alignment(horizontal="right")
+
+    for col_num in range(1, 16):
+        ws.cell(row=row_idx, column=col_num).border = thin_border
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 11)
+
+    ws.column_dimensions["H"].width = 35
+    ws.column_dimensions["F"].width = 28
+    ws.column_dimensions["D"].width = 22
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
+    response["Content-Disposition"] = f'attachment; filename="Log_Kinerja_SDM_{timestamp}.xlsx"'
+    wb.save(response)
+    return response
+
 
 
 # =========================================================================

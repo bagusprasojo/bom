@@ -891,6 +891,14 @@ class EmployeeWorkLog(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="work_logs")
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="employee_work_logs")
+    labor_realization = models.OneToOneField(
+        "LaborRealization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_work_log",
+        help_text="Tautan ke baris realisasi tenaga kerja proyek HPP jika sudah dikonversi"
+    )
     date = models.DateField()
     activity_category = models.CharField(max_length=100, default="Produksi / Fabrikasi")
     task_description = models.TextField()
@@ -905,6 +913,16 @@ class EmployeeWorkLog(models.Model):
 
     class Meta:
         ordering = ["-date", "-created_at"]
+
+    @property
+    def suggested_hourly_rate(self):
+        if self.employee and self.employee.daily_rate:
+            return round(self.employee.daily_rate / Decimal(8), 2)
+        return Decimal(0)
+
+    @property
+    def is_posted_to_realization(self):
+        return self.labor_realization_id is not None
 
     def __str__(self):
         return f"{self.date} - {self.employee.name}: {self.task_description[:30]}"

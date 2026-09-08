@@ -124,9 +124,12 @@ urlpatterns = [
     
     # Log Kinerja Karyawan
     path("work-logs/", views.work_log_list, name="work_log_list"),
+    path("work-logs/export/", views.work_log_export_excel, name="work_log_export_excel"),
     path("work-logs/new/", views.work_log_create, name="work_log_create"),
     path("work-logs/<uuid:uuid>/update/", views.work_log_update, name="work_log_update"),
     path("work-logs/<uuid:uuid>/delete/", views.work_log_delete, name="work_log_delete"),
+    path("work-logs/<uuid:uuid>/post-realization/", views.work_log_post_to_realization, name="work_log_post_to_realization"),
+    path("work-logs/<uuid:uuid>/unpost-realization/", views.work_log_unpost_from_realization, name="work_log_unpost_from_realization"),
 
     # Master Data Jenis Tidak Masuk (Absence Types)
     path("absence-types/", views_absence_type.absence_type_list, name="absence_type_list"),
