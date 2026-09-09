@@ -1,0 +1,337 @@
+{% extends "hpp/base.html" %}
+
+{% block title %}Matriks Hak Akses Role & Menu - Sistem HPP & BOM{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-16" x-data="{
+    filterQuery: '',
+    selectedModule: 'ALL',
+    isCustomMenuModalOpen: false,
+    toggleColumn(roleUuid, checked) {
+        document.querySelectorAll(`.role-col-${roleUuid}`).forEach(cb => {
+            if (!cb.disabled) {
+                cb.checked = checked;
+            }
+        });
+    },
+    toggleModule(roleUuid, moduleKey, checked) {
+        document.querySelectorAll(`.role-col-${roleUuid}.mod-${moduleKey}`).forEach(cb => {
+            if (!cb.disabled) {
+                cb.checked = checked;
+            }
+        });
+    }
+}">
+
+    <!-- Page Header & Tab Navigation -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div>
+            <div class="flex items-center space-x-2">
+                <span class="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                </span>
+                <h1 class="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Pengaturan & Hak Akses</h1>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-500 mt-1">
+                Kelola hak akses menu untuk setiap role secara dinamis dan real-time tanpa restart server.
+            </p>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold">
+            <a href="{% url 'role_permission_matrix' %}" class="px-3.5 py-1.5 rounded-lg bg-white text-indigo-700 shadow-sm border border-slate-200">
+                Matriks Hak Akses
+            </a>
+            <a href="{% url 'user_manage_list' %}" class="px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">
+                Manajemen Pengguna
+            </a>
+            <a href="{% url 'role_manage_list' %}" class="px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">
+                Master Role
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Stats Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-3">
+            <div class="p-2.5 rounded-lg bg-indigo-50 text-indigo-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Role</div>
+                <div class="text-xl font-black text-slate-800">{{ roles|length }} Role</div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-3">
+            <div class="p-2.5 rounded-lg bg-emerald-50 text-emerald-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Menu</div>
+                <div class="text-xl font-black text-slate-800">{{ total_menus }} Menu</div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-3">
+            <div class="p-2.5 rounded-lg bg-purple-50 text-purple-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 uppercase font-bold tracking-wider">Modul Terdaftar</div>
+                <div class="text-xl font-black text-slate-800">{{ modules_dict|length }} Modul</div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-3">
+            <div class="p-2.5 rounded-lg bg-amber-50 text-amber-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 uppercase font-bold tracking-wider">Superadmin</div>
+                <div class="text-xs font-bold text-emerald-600 mt-1">100% Full Access</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Matrix Form -->
+    <form method="POST" action="{% url 'role_permission_matrix' %}" id="matrixForm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_matrix">
+
+        <!-- Toolbar: Search, Filter, Buttons -->
+        <div class="bg-white p-4 rounded-t-2xl border-t border-x border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
+                <!-- Search Filter -->
+                <div class="relative w-full sm:w-64">
+                    <input type="text" x-model="filterQuery" placeholder="Cari nama atau kode menu..." class="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+
+                <!-- Modul Filter -->
+                <select x-model="selectedModule" class="text-xs py-2 px-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-indigo-500">
+                    <option value="ALL">Semua Modul ({{ modules_dict|length }})</option>
+                    {% for mod_name in modules_dict.keys %}
+                        <option value="{{ mod_name }}">{{ mod_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
+                <button type="button" @click="isCustomMenuModalOpen = true" class="inline-flex items-center px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition">
+                    <svg class="w-3.5 h-3.5 mr-1.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Tambah Menu Kustom
+                </button>
+
+                <button type="submit" name="action" value="reset_defaults" onclick="return confirm('Apakah Anda yakin ingin mereset seluruh izin matriks ke konfigurasi standar sistem? Perubahan kustom Anda akan ditimpa.')" class="inline-flex items-center px-3.5 py-2 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition">
+                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reset Standar Pabrik
+                </button>
+
+                <button type="submit" name="action" value="save_matrix" class="inline-flex items-center px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Simpan Perubahan Matriks
+                </button>
+            </div>
+        </div>
+
+        <!-- Matrix Table Container -->
+        <div class="overflow-x-auto bg-white border-b border-x border-slate-200 rounded-b-2xl shadow-sm">
+            <table class="w-full border-collapse text-left text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200">
+                        <th class="py-3.5 px-4 font-bold text-slate-700 uppercase tracking-wider min-w-[280px] sticky left-0 bg-slate-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                            Modul & Menu Aplikasi
+                        </th>
+                        {% for role in roles %}
+                            <th class="py-3.5 px-3 text-center min-w-[130px] max-w-[170px] border-l border-slate-200">
+                                <div class="flex flex-col items-center space-y-1">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold {{ role.badge_color }} border">
+                                        {{ role.name }}
+                                    </span>
+                                    {% if role.code == "SUPERADMIN" %}
+                                        <span class="text-[10px] text-purple-600 font-semibold">(Selalu Tercentang)</span>
+                                    {% else %}
+                                        <label class="inline-flex items-center space-x-1 text-[10px] text-slate-500 hover:text-indigo-600 cursor-pointer pt-0.5">
+                                            <input type="checkbox" @change="toggleColumn('{{ role.uuid }}', $event.target.checked)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 scale-90">
+                                            <span>Pilih Semua</span>
+                                        </label>
+                                    {% endif %}
+                                </div>
+                            </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+
+                <tbody class="divide-y divide-slate-100">
+                    {% for mod_name, menu_list in modules_dict.items %}
+                        <!-- Module Group Header -->
+                        <tr class="bg-slate-100/70 border-y border-slate-200 font-semibold"
+                            x-show="(selectedModule === 'ALL' || selectedModule === '{{ mod_name|escapejs }}')">
+                            <td class="py-2.5 px-4 text-slate-800 uppercase tracking-wider text-[11px] sticky left-0 bg-slate-100/95 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                <span class="inline-flex items-center">
+                                    <span class="w-2 h-2 rounded-full bg-indigo-500 mr-2"></span>
+                                    {{ mod_name }} ({{ menu_list|length }} menu)
+                                </span>
+                            </td>
+                            {% for role in roles %}
+                                <td class="py-2 px-2 text-center border-l border-slate-200">
+                                    {% if role.code != "SUPERADMIN" %}
+                                        <button type="button" @click="toggleModule('{{ role.uuid }}', '{{ forloop.parentloop.counter }}', true)" title="Centang modul ini untuk role {{ role.name }}" class="px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 hover:bg-indigo-100/60 rounded">
+                                            &check; Modul
+                                        </button>
+                                        <span class="text-slate-300 text-[10px]">|</span>
+                                        <button type="button" @click="toggleModule('{{ role.uuid }}', '{{ forloop.parentloop.counter }}', false)" title="Batal centang modul ini untuk role {{ role.name }}" class="px-1.5 py-0.5 text-[9px] font-bold text-rose-600 hover:bg-rose-100/60 rounded">
+                                            &times;
+                                        </button>
+                                    {% else %}
+                                        <span class="text-[10px] text-slate-400">&bull;</span>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+
+                        <!-- Menu Rows -->
+                        {% for menu in menu_list %}
+                            <tr class="hover:bg-indigo-50/30 transition border-b border-slate-100"
+                                x-show="(selectedModule === 'ALL' || selectedModule === '{{ mod_name|escapejs }}') &&
+                                        (filterQuery === '' || '{{ menu.name|lower|escapejs }}'.includes(filterQuery.toLowerCase()) || '{{ menu.code|lower|escapejs }}'.includes(filterQuery.toLowerCase()))">
+                                <!-- Menu Title & Details -->
+                                <td class="py-2.5 px-4 sticky left-0 bg-white hover:bg-indigo-50/30 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="p-1 rounded bg-slate-100 text-slate-600 mt-0.5 flex-shrink-0">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ menu.icon_svg|default:'M4 6h16M4 12h16M4 18h16' }}" />
+                                            </svg>
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="font-bold text-slate-800 text-xs truncate">{{ menu.name }}</div>
+                                            <div class="flex items-center space-x-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                                                <span class="bg-slate-100 px-1 py-0.2 rounded border border-slate-200">{{ menu.code }}</span>
+                                                <span class="text-slate-400 truncate">{{ menu.url_name }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <!-- Role Checkbox Cells -->
+                                {% for role in roles %}
+                                    <td class="py-2.5 px-3 text-center border-l border-slate-100 align-middle">
+                                        {% if role.code == "SUPERADMIN" %}
+                                            <input type="checkbox" checked disabled class="rounded border-purple-300 text-purple-600 bg-purple-50 cursor-not-allowed scale-110 shadow-sm" title="Superadmin selalu memiliki akses">
+                                        {% else %}
+                                            <input type="checkbox"
+                                                   name="perm_{{ role.uuid }}_{{ menu.code }}"
+                                                   class="role-col-{{ role.uuid }} mod-{{ forloop.parentloop.parentloop.counter }} rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 scale-110 cursor-pointer shadow-sm"
+                                                   {% for key, allowed in perms_map.items %}
+                                                       {% if key.0 == role.uuid and key.1 == menu.code and allowed %}checked{% endif %}
+                                                   {% endfor %}>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Bottom Save Button Bar -->
+        <div class="mt-4 flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span class="text-xs text-slate-500">
+                Tekan <strong>Simpan Perubahan Matriks</strong> setelah mencentang atau menghapus izin.
+            </span>
+            <button type="submit" name="action" value="save_matrix" class="inline-flex items-center px-6 py-2.5 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20 transition">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Simpan Perubahan Matriks
+            </button>
+        </div>
+    </form>
+
+    <!-- Modal Tambah Menu Kustom Baru -->
+    <div x-show="isCustomMenuModalOpen"
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-5"
+             @click.away="isCustomMenuModalOpen = false">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center space-x-2">
+                    <div class="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800">Daftarkan Menu Kustom Baru</h3>
+                </div>
+                <button @click="isCustomMenuModalOpen = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+            </div>
+
+            <form method="POST" action="{% url 'menu_register_custom' %}" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Kode Menu Unik</label>
+                    <input type="text" name="code" placeholder="Contoh: MENU_LAPORAN_LABA" required class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 uppercase font-mono focus:ring-2 focus:ring-indigo-500">
+                    <p class="text-[11px] text-slate-400 mt-0.5">Otomatis berawalan <code>MENU_</code> jika belum ada.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nama Menu di Tampilan</label>
+                    <input type="text" name="name" placeholder="Contoh: Laporan Laba Rugi Eksekutif" required class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Modul Induk</label>
+                        <input type="text" name="module" list="modules_list" placeholder="Pilih atau ketik baru" required class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                        <datalist id="modules_list">
+                            {% for mod_name in modules_dict.keys %}
+                                <option value="{{ mod_name }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Django URL Name</label>
+                        <input type="text" name="url_name" placeholder="Contoh: profit_loss_report" required class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 font-mono focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">SVG Icon Path (Opsional)</label>
+                    <textarea name="icon_svg" rows="2" placeholder="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5..." class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 font-mono focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+
+                <div class="pt-3 flex justify-end space-x-2">
+                    <button type="button" @click="isCustomMenuModalOpen = false" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition">
+                        Daftarkan Menu
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

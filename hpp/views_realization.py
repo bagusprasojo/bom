@@ -17,6 +17,7 @@ from .models import (
     ProjectFinishedGood, BOMItemRealization, LaborRealization,
     FinishedGoodRealization, OverheadRealization, RawMaterial
 )
+from .views_auth import menu_permission_required
 
 
 def _clean_decimal(val_str, default=Decimal(0)):
@@ -43,6 +44,7 @@ def _clean_decimal(val_str, default=Decimal(0)):
         return default
 
 
+@menu_permission_required("MENU_PROJECT_REALIZATION")
 def project_realization_list(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()

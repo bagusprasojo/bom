@@ -3,8 +3,10 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.db.models import Q, Count
 from .models import AbsenceType, Attendance
+from .views_auth import menu_permission_required
 
 
+@menu_permission_required("MENU_ABSENCE_TYPE")
 def absence_type_list(request):
     """
     Daftar Master Jenis Tidak Masuk Karyawan

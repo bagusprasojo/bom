@@ -23,11 +23,13 @@ from .models import (
     ProjectFinishedGood, FinishedGoodStockMutation,
     RawMaterial, LaborRealization
 )
+from .views_auth import menu_permission_required
 
 
 # =========================================================================
 # PROJECT VIEWS
 # =========================================================================
+@menu_permission_required("MENU_PROJECT_LIST")
 def project_list(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
@@ -54,6 +56,7 @@ def project_list(request):
     })
 
 
+@menu_permission_required("MENU_PROJECT_CREATE")
 @transaction.atomic
 def project_create(request):
     if request.method == "POST":
@@ -1937,6 +1940,7 @@ def finished_good_delete(request, uuid):
 from datetime import date, datetime
 
 
+@menu_permission_required("MENU_ATTENDANCE")
 def attendance_list(request):
     """
     Halaman Rekap Absensi Karyawan
@@ -2100,6 +2104,7 @@ def attendance_delete(request, uuid):
     return redirect(f"/attendance/?date={att_date_str}")
 
 
+@menu_permission_required("MENU_EMPLOYEE")
 def employee_list(request):
     """
     Daftar Master Karyawan
@@ -2177,6 +2182,7 @@ STANDARD_ACTIVITY_CATEGORIES = [
 ]
 
 
+@menu_permission_required("MENU_WORK_LOG")
 def work_log_list(request):
     """
     Daftar Log Kinerja & Kegiatan Harian Karyawan
@@ -2962,6 +2968,7 @@ def attendance_export_excel(request):
 # =========================================================================
 # USER JOURNEY & PANDUAN APLIKASI
 # =========================================================================
+@menu_permission_required("MENU_USER_JOURNEY")
 def user_journey(request):
     """
     Menampilkan panduan alur pengguna (User Journey) end-to-end:
@@ -3175,6 +3182,7 @@ def user_journey(request):
     })
 
 
+@menu_permission_required("MENU_ADVANTAGES")
 def app_advantages(request):
     """
     Halaman khusus dokumentasi dan visualisasi interaktif Keunggulan & Nilai Strategis Aplikasi

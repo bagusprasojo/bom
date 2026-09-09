@@ -1,5 +1,6 @@
 from django.db import models, transaction
 from django.apps import apps
+from django.contrib.auth.models import User
 from decimal import Decimal
 import uuid
 
@@ -952,3 +953,109 @@ class UnitMaster(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.code}) - {self.get_category_display()}"
+
+
+# =========================================================================
+# RBAC (ROLE-BASED ACCESS CONTROL) & MENU PERMISSION MODELS
+# =========================================================================
+
+class Role(models.Model):
+    """
+    Model Peran Pengguna (Role)
+    Menentukan kelompok jabatan dan hak akses default ke menu aplikasi.
+    """
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    code = models.CharField(max_length=50, unique=True, db_index=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default="")
+    badge_color = models.CharField(max_length=100, default="bg-slate-100 text-slate-700 border-slate-300")
+    is_system_role = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code"]
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class UserProfile(models.Model):
+    """
+    Profil Pengguna Terhubung ke django.contrib.auth.models.User
+    Menautkan akun user ke Role tertentu.
+    """
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True, related_name="users")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} [{self.role_name}]"
+
+    @property
+    def role_code(self):
+        if self.user.is_superuser:
+            return "SUPERADMIN"
+        if self.role:
+            return self.role.code
+        return "GUEST"
+
+    @property
+    def role_name(self):
+        if self.user.is_superuser:
+            return "Super Admin"
+        if self.role:
+            return self.role.name
+        return "Guest"
+
+    @property
+    def badge_color(self):
+        if self.user.is_superuser:
+            return "bg-purple-100 text-purple-800 border-purple-300"
+        if self.role:
+            return self.role.badge_color
+        return "bg-slate-100 text-slate-600 border-slate-300"
+
+
+class AppMenu(models.Model):
+    """
+    Master Menu Aplikasi
+    Mendaftarkan setiap fitur/menu yang dapat dikontrol izin visibilitasnya.
+    """
+    code = models.CharField(max_length=60, unique=True, primary_key=True)
+    name = models.CharField(max_length=100)
+    module = models.CharField(max_length=60, db_index=True)
+    url_name = models.CharField(max_length=100)
+    icon_svg = models.TextField(blank=True, default="")
+    sort_order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "code"]
+
+    def __str__(self):
+        return f"[{self.module}] {self.name} ({self.code})"
+
+
+class RoleMenuPermission(models.Model):
+    """
+    Relasi Matriks Hak Akses: Role -> Menu
+    Jika can_view=True, role tersebut dapat melihat dan mengakses menu bersangkutan.
+    """
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="menu_permissions")
+    menu = models.ForeignKey(AppMenu, on_delete=models.CASCADE, related_name="role_permissions")
+    can_view = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("role", "menu")
+
+    def __str__(self):
+        status = "ALLOW" if self.can_view else "DENY"
+        return f"{self.role.code} -> {self.menu.code}: {status}"

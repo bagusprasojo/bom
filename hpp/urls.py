@@ -6,6 +6,8 @@ from . import views_raw_material
 from . import views_unit
 from . import views_finished_good
 from . import views_absence_type
+from . import views_auth
+from . import views_role_permission
 
 urlpatterns = [
     # Project
@@ -145,5 +147,16 @@ urlpatterns = [
 
     # Keunggulan & Nilai Strategis Aplikasi
     path("keunggulan/", views.app_advantages, name="app_advantages"),
+
+    # Autentikasi & Akun
+    path("login/", views_auth.login_view, name="login"),
+    path("logout/", views_auth.logout_view, name="logout"),
+    path("profile/", views_auth.profile_view, name="profile"),
+
+    # Pengaturan & Hak Akses (RBAC Superadmin)
+    path("settings/permissions/", views_role_permission.role_permission_matrix, name="role_permission_matrix"),
+    path("settings/users/", views_role_permission.user_manage_list, name="user_manage_list"),
+    path("settings/roles/", views_role_permission.role_manage_list, name="role_manage_list"),
+    path("settings/menus/new/", views_role_permission.menu_register_custom, name="menu_register_custom"),
 ]
 

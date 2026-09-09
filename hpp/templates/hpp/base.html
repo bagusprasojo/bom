@@ -9,6 +9,7 @@
     <!-- Alpine.js CDN -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
+        [x-cloak] { display: none !important; }
         @media print {
             .no-print { display: none !important; }
             body { background: white !important; color: black !important; }
@@ -21,7 +22,8 @@
     projectTreeOpen: true,
     materialTreeOpen: true,
     inventoryTreeOpen: true,
-    hrTreeOpen: true
+    hrTreeOpen: true,
+    settingsTreeOpen: true
 }">
     <!-- Layout Wrapper -->
     <div class="min-h-screen flex flex-col md:flex-row">
@@ -34,11 +36,21 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                     </svg>
                 </button>
-                <span class="font-extrabold text-base tracking-tight text-indigo-300">HPP & BOM Manager</span>
+                <span class="font-extrabold text-base tracking-tight text-indigo-300">HPP & BOM</span>
             </div>
-            <a href="{% url 'project_create' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded text-xs font-semibold">
-                + Project
-            </a>
+
+            <div class="flex items-center space-x-2">
+                {% if request.user.is_authenticated %}
+                    <a href="{% url 'profile' %}" class="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-200">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span class="truncate max-w-[80px]">{{ request.user.first_name|default:request.user.username }}</span>
+                    </a>
+                {% else %}
+                    <a href="{% url 'login' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold">
+                        Masuk
+                    </a>
+                {% endif %}
+            </div>
         </header>
 
         <!-- Mobile Sidebar Backdrop -->
@@ -70,18 +82,21 @@
                 </button>
             </div>
 
-            <!-- Sidebar Navigation (Treeview) -->
+            <!-- Sidebar Navigation (Treeview with Dynamic RBAC) -->
             <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto text-xs font-medium">
                 
                 <!-- Quick Action Button -->
+                {% if is_superadmin_user or 'MENU_PROJECT_CREATE' in allowed_menu_codes %}
                 <div class="pb-3 px-1">
                     <a href="{% url 'project_create' %}" class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-lg shadow transition">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                         <span>Buat Project Baru</span>
                     </a>
                 </div>
+                {% endif %}
 
                 <!-- TREE 1: MANAJEMEN PROJECT & HPP -->
+                {% if is_superadmin_user or 'Project & HPP' in allowed_modules %}
                 <div>
                     <button @click="projectTreeOpen = !projectTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
                         <div class="flex items-center gap-2.5">
@@ -91,22 +106,30 @@
                         <svg :class="projectTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                     </button>
                     <div x-show="projectTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
+                        {% if is_superadmin_user or 'MENU_PROJECT_LIST' in allowed_menu_codes %}
                         <a href="{% url 'project_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/' or '/projects/' in request.path and not '/realization' in request.path and not '/new/' in request.path %}text-indigo-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Daftar Project & HPP</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_PROJECT_REALIZATION' in allowed_menu_codes %}
                         <a href="{% url 'project_realization_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/realization' in request.path %}text-cyan-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Realisasi Project</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_CUSTOMER_LIST' in allowed_menu_codes %}
                         <a href="{% url 'customer_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/customers/' in request.path %}text-indigo-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Master Customer</span>
                         </a>
+                        {% endif %}
                     </div>
                 </div>
+                {% endif %}
 
-                                <!-- TREE: BAHAN BAKU -->
+                <!-- TREE 2: BAHAN BAKU -->
+                {% if is_superadmin_user or 'Bahan Baku' in allowed_modules %}
                 <div>
                     <button @click="materialTreeOpen = !materialTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
                         <div class="flex items-center gap-2.5">
@@ -116,22 +139,30 @@
                         <svg :class="materialTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                     </button>
                     <div x-show="materialTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
+                        {% if is_superadmin_user or 'MENU_RAW_MATERIAL' in allowed_menu_codes %}
                         <a href="{% url 'raw_material_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/raw-materials/' %}text-teal-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Daftar Bahan Baku</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_RM_MUTATION' in allowed_menu_codes %}
                         <a href="{% url 'raw_material_stock_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/raw-materials/mutations/' in request.path %}text-teal-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Mutasi Bahan Baku</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_RM_STOCK_CARD' in allowed_menu_codes %}
                         <a href="{% url 'raw_material_stock_card_index' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/raw-materials/cards/' in request.path or '/raw-materials/' in request.path and '/card/' in request.path %}text-teal-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Kartu Stok Bahan</span>
                         </a>
+                        {% endif %}
                     </div>
                 </div>
+                {% endif %}
 
-                <!-- TREE 2: BARANG JADI -->
+                <!-- TREE 3: BARANG JADI -->
+                {% if is_superadmin_user or 'Barang Jadi' in allowed_modules %}
                 <div>
                     <button @click="inventoryTreeOpen = !inventoryTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
                         <div class="flex items-center gap-2.5">
@@ -141,22 +172,30 @@
                         <svg :class="inventoryTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                     </button>
                     <div x-show="inventoryTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
+                        {% if is_superadmin_user or 'MENU_FINISHED_GOOD' in allowed_menu_codes %}
                         <a href="{% url 'finished_good_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if request.path == '/finished-goods/' or request.path == '/stock/' %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Daftar Barang Jadi</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_FG_MUTATION' in allowed_menu_codes %}
                         <a href="{% url 'finished_good_mutation_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/mutations/' in request.path and '/finished-goods/' in request.path or '/stock/mutations/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Mutasi Barang Jadi</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_FG_STOCK_CARD' in allowed_menu_codes %}
                         <a href="{% url 'finished_good_stock_card_index' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/cards/' in request.path and '/finished-goods/' in request.path or '/stock/cards/' in request.path or '/finished-goods/' in request.path and '/card/' in request.path %}text-emerald-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Kartu Stok Barang</span>
                         </a>
+                        {% endif %}
                     </div>
                 </div>
+                {% endif %}
 
-                <!-- TREE 3: SDM, ABSENSI & KINERJA -->
+                <!-- TREE 4: SDM, ABSENSI & KINERJA -->
+                {% if is_superadmin_user or 'SDM & Tenaga Kerja' in allowed_modules %}
                 <div>
                     <button @click="hrTreeOpen = !hrTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
                         <div class="flex items-center gap-2.5">
@@ -166,26 +205,36 @@
                         <svg :class="hrTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                     </button>
                     <div x-show="hrTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-slate-800 ml-4 my-1">
+                        {% if is_superadmin_user or 'MENU_ATTENDANCE' in allowed_menu_codes %}
                         <a href="{% url 'attendance_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/attendance/' in request.path %}text-amber-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Rekap Absensi Harian</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_WORK_LOG' in allowed_menu_codes %}
                         <a href="{% url 'work_log_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/work-logs/' in request.path %}text-amber-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Log Kinerja & Kegiatan</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_EMPLOYEE' in allowed_menu_codes %}
                         <a href="{% url 'employee_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/employees/' in request.path %}text-amber-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Master Data Karyawan</span>
                         </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_ABSENCE_TYPE' in allowed_menu_codes %}
                         <a href="{% url 'absence_type_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/absence-types/' in request.path %}text-amber-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Master Jenis Tidak Masuk</span>
                         </a>
+                        {% endif %}
                     </div>
                 </div>
+                {% endif %}
 
-                <!-- MASTER SATUAN (DI BAWAH SDM) -->
+                <!-- MASTER SATUAN -->
+                {% if is_superadmin_user or 'MENU_UNIT_MASTER' in allowed_menu_codes %}
                 <div class="pt-2 border-t border-slate-800">
                     <a href="{% url 'unit_list' %}" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition {% if '/units/' in request.path %}bg-slate-800 text-violet-400 font-bold border-l-4 border-violet-500{% endif %}">
                         <div class="flex items-center gap-2.5">
@@ -195,8 +244,10 @@
                         <span class="text-[10px] bg-violet-900/60 text-violet-300 font-bold px-1.5 py-0.5 rounded">4 Kat</span>
                     </a>
                 </div>
+                {% endif %}
 
                 <!-- PANDUAN & USER JOURNEY -->
+                {% if is_superadmin_user or 'MENU_USER_JOURNEY' in allowed_menu_codes %}
                 <div class="pt-1">
                     <a href="{% url 'user_journey' %}" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition {% if '/user-journey/' in request.path %}bg-slate-800 text-sky-400 font-bold border-l-4 border-sky-500{% endif %}">
                         <div class="flex items-center gap-2.5">
@@ -206,8 +257,10 @@
                         <span class="text-[10px] bg-sky-900/60 text-sky-300 font-bold px-1.5 py-0.5 rounded">Panduan</span>
                     </a>
                 </div>
+                {% endif %}
 
                 <!-- KEUNGGULAN APLIKASI -->
+                {% if is_superadmin_user or 'MENU_ADVANTAGES' in allowed_menu_codes %}
                 <div class="pt-1">
                     <a href="{% url 'app_advantages' %}" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition {% if '/keunggulan/' in request.path %}bg-slate-800 text-amber-400 font-bold border-l-4 border-amber-500{% endif %}">
                         <div class="flex items-center gap-2.5">
@@ -217,22 +270,127 @@
                         <span class="text-[10px] bg-amber-900/60 text-amber-300 font-bold px-1.5 py-0.5 rounded">10 Nilai</span>
                     </a>
                 </div>
+                {% endif %}
+
+                <!-- TREE 5: PENGATURAN & HAK AKSES (KHUSUS SUPER ADMIN) -->
+                {% if is_superadmin_user or 'Pengaturan & Hak Akses' in allowed_modules %}
+                <div class="pt-2 border-t border-slate-800">
+                    <button @click="settingsTreeOpen = !settingsTreeOpen" class="w-full flex items-center justify-between p-2 rounded-lg text-slate-200 hover:bg-slate-800 transition">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            <span class="font-bold uppercase tracking-wider text-[11px] text-purple-300">Pengaturan Akses</span>
+                        </div>
+                        <svg :class="settingsTreeOpen ? 'rotate-90' : ''" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                    <div x-show="settingsTreeOpen" class="pl-6 pr-1 py-1 space-y-1 border-l-2 border-purple-900 ml-4 my-1">
+                        {% if is_superadmin_user or 'MENU_ROLE_MATRIX' in allowed_menu_codes %}
+                        <a href="{% url 'role_permission_matrix' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/settings/permissions/' in request.path %}text-purple-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Matriks Hak Akses</span>
+                        </a>
+                        {% endif %}
+                        {% if is_superadmin_user or 'MENU_USER_MANAGE' in allowed_menu_codes %}
+                        <a href="{% url 'user_manage_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/settings/users/' in request.path %}text-purple-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Manajemen Pengguna</span>
+                        </a>
+                        {% endif %}
+                        {% if is_superadmin_user %}
+                        <a href="{% url 'role_manage_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/settings/roles/' in request.path %}text-purple-400 font-bold bg-slate-800/40{% endif %}">
+                            <span>&bull;</span>
+                            <span>Master Role</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
 
             </nav>
 
-            <!-- User / System Status Footer in Sidebar -->
-            <div class="p-3 border-t border-slate-800 text-[11px] text-slate-400 bg-slate-950/60 flex items-center justify-between">
-                <span class="flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>System Online</span>
-                </span>
-                <span class="font-mono text-[10px] text-slate-500">v1.3</span>
+            <!-- User Account / Login Status Footer in Sidebar -->
+            <div class="p-3 border-t border-slate-800 bg-slate-950/80">
+                {% if request.user.is_authenticated %}
+                    <div class="flex items-center justify-between">
+                        <a href="{% url 'profile' %}" class="flex items-center space-x-2.5 min-w-0 group hover:opacity-90 transition">
+                            <div class="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center font-bold text-xs text-white">
+                                {{ request.user.first_name|default:request.user.username|slice:":2"|upper }}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="text-xs font-bold text-white truncate group-hover:text-indigo-300">
+                                    {{ request.user.first_name|default:request.user.username }}
+                                </div>
+                                <div class="flex items-center space-x-1 mt-0.5">
+                                    {% if current_user_role %}
+                                        <span class="inline-flex text-[9px] px-1.5 py-0.2 rounded font-semibold {{ current_user_role.badge_color }}">
+                                            {{ current_user_role.name }}
+                                        </span>
+                                    {% elif is_superadmin_user %}
+                                        <span class="inline-flex text-[9px] px-1.5 py-0.2 rounded font-semibold bg-purple-100 text-purple-800">
+                                            Super Admin
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </a>
+
+                        <div class="flex items-center space-x-1 flex-shrink-0">
+                            <a href="{% url 'profile' %}" title="Profil & Kata Sandi" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                            </a>
+                            <a href="{% url 'logout' %}" title="Keluar / Logout" class="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-slate-800 transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                {% else %}
+                    <a href="{% url 'login' %}" class="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+                        </svg>
+                        <span>Masuk ke Sistem</span>
+                    </a>
+                {% endif %}
             </div>
         </aside>
 
-        <!-- Right Workspace / Form Area -->
+        <!-- Right Workspace / Main Content Area -->
         <div class="flex-1 flex flex-col min-w-0 bg-slate-50 min-h-screen">
-            <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+            <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-4">
+                <!-- Django Messages Notification Banner -->
+                {% if messages %}
+                    <div class="space-y-2 no-print" x-data="{ show: true }" x-show="show">
+                        {% for message in messages %}
+                            <div class="flex items-center justify-between p-4 rounded-xl text-sm font-medium border shadow-sm transition
+                                {% if message.tags == 'success' %}
+                                    bg-emerald-50 text-emerald-800 border-emerald-200
+                                {% elif message.tags == 'error' %}
+                                    bg-rose-50 text-rose-800 border-rose-200
+                                {% elif message.tags == 'warning' %}
+                                    bg-amber-50 text-amber-800 border-amber-200
+                                {% else %}
+                                    bg-indigo-50 text-indigo-800 border-indigo-200
+                                {% endif %}">
+                                <div class="flex items-center space-x-2.5">
+                                    {% if message.tags == 'success' %}
+                                        <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                    {% elif message.tags == 'error' %}
+                                        <svg class="w-5 h-5 text-rose-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                                    {% else %}
+                                        <svg class="w-5 h-5 text-indigo-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                                    {% endif %}
+                                    <span>{{ message }}</span>
+                                </div>
+                                <button @click="show = false" class="text-slate-400 hover:text-slate-600 font-bold p-1">&times;</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
                 {% block content %}{% endblock %}
             </main>
         </div>

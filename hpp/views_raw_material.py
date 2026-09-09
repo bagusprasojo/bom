@@ -12,6 +12,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from .models import UnitMaster, RawMaterial, RawMaterialUnitConversion, RawMaterialStockMutation
+from .views_auth import menu_permission_required
 
 def _reconcile_material_stock(rm):
     """
@@ -35,6 +36,7 @@ def _reconcile_material_stock(rm):
     return running_balance
 
 
+@menu_permission_required("MENU_RAW_MATERIAL")
 def raw_material_list(request):
     """
     Laporan Persediaan Bahan Baku (Valuasi Berdasarkan Harga Beli Terakhir)
@@ -441,6 +443,7 @@ def raw_material_conversion_delete(request, uuid):
         return redirect(next_url)
     return redirect("raw_material_detail", uuid=rm.uuid)
 
+@menu_permission_required("MENU_RM_MUTATION")
 def raw_material_stock_mutation_list(request):
     mat_uuid = request.GET.get("mat", "").strip()
     mutation_type = request.GET.get("type", "").strip()
@@ -847,6 +850,7 @@ def raw_material_stock_card(request, uuid):
     return redirect(f"/raw-materials/cards/?mat={uuid}")
 
 
+@menu_permission_required("MENU_RM_STOCK_CARD")
 def raw_material_stock_card_index(request):
     """
     Kartu Stok Bahan Baku Standalone (Filter Pilih Item, Rentang Tanggal, Saldo Awal, Pagination)

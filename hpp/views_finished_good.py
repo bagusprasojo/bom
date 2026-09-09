@@ -13,8 +13,10 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 from .models import UnitMaster, FinishedGood, FinishedGoodStockMutation
+from .views_auth import menu_permission_required
 
 
+@menu_permission_required("MENU_FINISHED_GOOD")
 def finished_good_list(request):
     """
     Daftar Master & Laporan Persediaan Barang Jadi (Finished Goods)
@@ -385,6 +387,7 @@ def _reconcile_finished_good_stock(fg):
     return running_balance
 
 
+@menu_permission_required("MENU_FG_MUTATION")
 def finished_good_mutation_list(request):
     """
     Halaman Menu Mutasi Barang Jadi (Pencatatan Barang Masuk, Rusak, Penyesuaian)
@@ -832,6 +835,7 @@ def _get_finished_good_stock_card_data(fg_uuid, start_date_str, end_date_str):
     }
 
 
+@menu_permission_required("MENU_FG_STOCK_CARD")
 def finished_good_stock_card_index(request):
     """
     Menu Kartu Stok Barang Jadi Standalone (Pencarian Combobox, Filter Tanggal, Saldo Awal, Print, Export)

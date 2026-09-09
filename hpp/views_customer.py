@@ -3,7 +3,9 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.db.models import Q
 from .models import Customer
+from .views_auth import menu_permission_required
 
+@menu_permission_required("MENU_CUSTOMER_LIST")
 def customer_list(request):
     query = request.GET.get("q", "").strip()
     customers = Customer.objects.prefetch_related("projects").all().order_by("name")

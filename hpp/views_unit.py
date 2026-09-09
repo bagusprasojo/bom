@@ -2,7 +2,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Q
 from .models import UnitMaster
+from .views_auth import menu_permission_required
 
+@menu_permission_required("MENU_UNIT_MASTER")
 def unit_list(request):
     """Daftar & Manajemen Master Satuan"""
     category_filter = request.GET.get('category', '').strip()
