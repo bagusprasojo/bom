@@ -1,4 +1,9 @@
-﻿Django>=6.0
+Django>=6.0
 openpyxl>=3.1.5
 python-dotenv>=1.0.0
 gunicorn>=21.0.0; sys_platform != "win32"
+
+# MySQL Database Driver
+mysqlclient>=2.2.4
+pymysql>=1.1.0
+cryptography>=42.0.0
