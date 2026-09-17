@@ -5,9 +5,21 @@
 {% block content %}
 <div class="space-y-6 pb-16" x-data="{
     isAddUserModalOpen: false,
+    isEditUserModalOpen: false,
     isEditRoleModalOpen: false,
     isResetPasswordModalOpen: false,
-    selectedUser: { id: '', username: '', fullName: '', roleUuid: '' },
+    searchQuery: '',
+    selectedRoleFilter: 'ALL',
+    selectedUser: { id: '', username: '', fullName: '', email: '', phone: '', roleUuid: '' },
+    openEditUser(id, username, fullName, email, phone, roleUuid) {
+        this.selectedUser.id = id;
+        this.selectedUser.username = username;
+        this.selectedUser.fullName = fullName;
+        this.selectedUser.email = email;
+        this.selectedUser.phone = phone;
+        this.selectedUser.roleUuid = roleUuid;
+        this.isEditUserModalOpen = true;
+    },
     openEditRole(id, username, roleUuid) {
         this.selectedUser.id = id;
         this.selectedUser.username = username;
@@ -51,17 +63,37 @@
         </div>
     </div>
 
-    <!-- Toolbar: Add User Button -->
-    <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs text-slate-500 font-medium">
-            Total Terdaftar: <span class="font-bold text-slate-800">{{ users|length }} Pengguna</span>
+    <!-- Toolbar: Search, Role Filter & Add User Button -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="flex items-center space-x-3 w-full sm:w-auto">
+            <!-- Search Filter -->
+            <div class="relative w-full sm:w-64">
+                <input type="text" x-model="searchQuery" placeholder="Cari nama, username, email..." class="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
+
+            <!-- Role Filter -->
+            <select x-model="selectedRoleFilter" class="text-xs py-2 px-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-indigo-500">
+                <option value="ALL">Semua Role (Semua)</option>
+                {% for r in roles %}
+                    <option value="{{ r.code }}">{{ r.name }}</option>
+                {% endfor %}
+            </select>
         </div>
-        <button type="button" @click="isAddUserModalOpen = true" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition">
-            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-            </svg>
-            Tambah Pengguna Baru
-        </button>
+
+        <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+            <span class="text-xs text-slate-500 hidden sm:inline">
+                Total: <strong class="text-slate-800">{{ users|length }} Pengguna</strong>
+            </span>
+            <button type="button" @click="isAddUserModalOpen = true" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+                Tambah Pengguna Baru
+            </button>
+        </div>
     </div>
 
     <!-- Users Table -->
@@ -80,11 +112,13 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     {% for u in users %}
-                        <tr class="hover:bg-slate-50/60 transition">
+                        <tr class="hover:bg-slate-50/60 transition"
+                            x-show="(selectedRoleFilter === 'ALL' || selectedRoleFilter === '{{ u.profile.role_code|default:'GUEST' }}') &&
+                                    (searchQuery === '' || '{{ u.username|lower|escapejs }}'.includes(searchQuery.toLowerCase()) || '{{ u.first_name|lower|escapejs }}'.includes(searchQuery.toLowerCase()) || '{{ u.email|lower|escapejs }}'.includes(searchQuery.toLowerCase()))">
                             <td class="py-3 px-4">
                                 <div class="flex items-center space-x-3">
-                                    <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-700 uppercase">
-                                        {{ u.username|slice:":2" }}
+                                    <div class="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center font-bold text-indigo-700 uppercase">
+                                        {{ u.first_name|default:u.username|slice:":2" }}
                                     </div>
                                     <div>
                                         <div class="font-bold text-slate-900 text-sm flex items-center space-x-2">
@@ -115,8 +149,8 @@
                             </td>
 
                             <td class="py-3 px-4">
-                                <div class="text-slate-700">{{ u.email|default:"-" }}</div>
-                                <div class="text-[11px] text-slate-400">{{ u.profile.phone|default:"" }}</div>
+                                <div class="text-slate-700 font-medium">{{ u.email|default:"-" }}</div>
+                                <div class="text-[11px] text-slate-400 font-mono">{{ u.profile.phone|default:"" }}</div>
                             </td>
 
                             <td class="py-3 px-4 text-center">
@@ -139,9 +173,9 @@
                                 {% endif %}
                             </td>
 
-                            <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                                <!-- Edit Role -->
-                                <button type="button" @click="openEditRole('{{ u.id }}', '{{ u.username|escapejs }}', '{{ u.profile.role.uuid|default:'' }}')" title="Ubah Role" class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
+                            <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                                <!-- Edit Full User Details -->
+                                <button type="button" @click="openEditUser('{{ u.id }}', '{{ u.username|escapejs }}', '{{ u.first_name|escapejs }}', '{{ u.email|escapejs }}', '{{ u.profile.phone|escapejs }}', '{{ u.profile.role.uuid|default:'' }}')" title="Edit Profil & Role" class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
@@ -154,7 +188,7 @@
                                     </svg>
                                 </button>
 
-                                {% if u != request.user %}
+                                {% if u != request.user and not u.is_superuser %}
                                     <!-- Toggle Active Form -->
                                     <form method="POST" action="{% url 'user_manage_list' %}" class="inline">
                                         {% csrf_token %}
@@ -265,36 +299,61 @@
         </div>
     </div>
 
-    <!-- Modal Ubah Role Pengguna -->
-    <div x-show="isEditRoleModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4" @click.away="isEditRoleModalOpen = false">
+    <!-- Modal Edit Profil & Role Pengguna -->
+    <div x-show="isEditUserModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-5" @click.away="isEditUserModalOpen = false">
             <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 class="text-base font-bold text-slate-800">
-                    Ubah Role Akun: <span class="text-indigo-600 font-mono" x-text="'@' + selectedUser.username"></span>
-                </h3>
-                <button @click="isEditRoleModalOpen = false" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                <div class="flex items-center space-x-2">
+                    <div class="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800">
+                        Edit Data Pengguna: <span class="text-indigo-600 font-mono text-base" x-text="'@' + selectedUser.username"></span>
+                    </h3>
+                </div>
+                <button @click="isEditUserModalOpen = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
             </div>
 
             <form method="POST" action="{% url 'user_manage_list' %}" class="space-y-4">
                 {% csrf_token %}
-                <input type="hidden" name="action" value="update_role">
+                <input type="hidden" name="action" value="update_user">
                 <input type="hidden" name="user_id" :value="selectedUser.id">
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Pilih Role Baru</label>
-                    <select name="role_uuid" x-model="selectedUser.roleUuid" class="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-indigo-500 font-medium">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nama Lengkap</label>
+                    <input type="text" name="full_name" x-model="selectedUser.fullName" placeholder="Masukkan nama lengkap" class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Email</label>
+                        <input type="email" name="email" x-model="selectedUser.email" placeholder="user@perusahaan.com" class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">No. HP / WA</label>
+                        <input type="text" name="phone" x-model="selectedUser.phone" placeholder="08..." class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Penugasan Role *</label>
+                    <select name="role_uuid" x-model="selectedUser.roleUuid" required class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-indigo-500 font-medium">
+                        <option value="">-- Pilih Role Pengguna --</option>
                         {% for r in roles %}
                             <option value="{{ r.uuid }}">{{ r.name }}</option>
                         {% endfor %}
                     </select>
-                    <p class="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-                        Hak akses menu pengguna akan otomatis mengikuti matriks izin yang terdaftar untuk role tersebut.
-                    </p>
                 </div>
 
-                <div class="pt-2 flex justify-end space-x-2">
-                    <button type="button" @click="isEditRoleModalOpen = false" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold">Batal</button>
-                    <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow transition">Simpan Role</button>
+                <div class="pt-3 flex justify-end space-x-2">
+                    <button type="button" @click="isEditUserModalOpen = false" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition">
+                        Simpan Perubahan
+                    </button>
                 </div>
             </form>
         </div>

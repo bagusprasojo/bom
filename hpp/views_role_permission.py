@@ -37,10 +37,6 @@ def role_permission_matrix(request):
             modules_dict[m.module] = []
         modules_dict[m.module].append(m)
 
-    # Fetch existing permissions into a fast lookup dict: (role_uuid, menu_code) -> bool
-    perms_qs = RoleMenuPermission.objects.all()
-    perms_map = {(p.role_id, p.menu_id): p.can_view for p in perms_qs}
-
     if request.method == "POST":
         action = request.POST.get("action", "save_matrix")
 
@@ -88,10 +84,39 @@ def role_permission_matrix(request):
             messages.success(request, "Hak akses seluruh role berhasil direset ke konfigurasi standar pabrik.")
             return redirect("role_permission_matrix")
 
+    # Fast lookup set of active permissions: (str(role.uuid), menu_code)
+    perms_qs = RoleMenuPermission.objects.all().select_related("role")
+    perms_set = {(str(p.role.uuid), p.menu_id) for p in perms_qs if p.can_view}
+
+    # Build structured modules_list for O(1) template rendering without nested template loops
+    modules_list = []
+    for mod_idx, (mod_name, menu_list) in enumerate(modules_dict.items(), start=1):
+        mod_item = {
+            "name": mod_name,
+            "mod_idx": mod_idx,
+            "menus": []
+        }
+        for menu in menu_list:
+            roles_perm = []
+            for role in roles:
+                is_super = (role.code == "SUPERADMIN")
+                can_view = is_super or ((str(role.uuid), menu.code) in perms_set)
+                roles_perm.append({
+                    "role": role,
+                    "field_name": f"perm_{role.uuid}_{menu.code}",
+                    "is_super": is_super,
+                    "can_view": can_view,
+                })
+            mod_item["menus"].append({
+                "menu": menu,
+                "roles_perm": roles_perm,
+            })
+        modules_list.append(mod_item)
+
     return render(request, "hpp/auth/role_permission_matrix.html", {
         "roles": roles,
         "modules_dict": modules_dict,
-        "perms_map": perms_map,
+        "modules_list": modules_list,
         "total_menus": len(menus),
     })
 
@@ -145,6 +170,36 @@ def user_manage_list(request):
             messages.success(request, f"Pengguna '{username}' berhasil dibuat dengan role {role.name if role else 'GUEST'}.")
             return redirect("user_manage_list")
 
+        elif action == "update_user":
+            user_id = request.POST.get("user_id")
+            target_user = get_object_or_404(User, id=user_id)
+
+            full_name = request.POST.get("full_name", "").strip()
+            email = request.POST.get("email", "").strip()
+            phone = request.POST.get("phone", "").strip()
+            role_uuid = request.POST.get("role_uuid", "").strip()
+
+            target_user.first_name = full_name
+            target_user.email = email
+
+            role = Role.objects.filter(uuid=role_uuid).first() if role_uuid else None
+            is_super = (role and role.code == "SUPERADMIN")
+
+            # Lindungi ROOT superuser agar status superuser tidak tercabut kecuali diedit superuser
+            if not target_user.is_superuser or request.user.is_superuser:
+                target_user.is_superuser = is_super
+                target_user.is_staff = is_super
+
+            target_user.save(update_fields=["first_name", "email", "is_superuser", "is_staff"])
+
+            profile, _ = UserProfile.objects.get_or_create(user=target_user)
+            profile.role = role
+            profile.phone = phone
+            profile.save(update_fields=["role", "phone"])
+
+            messages.success(request, f"Informasi pengguna '{target_user.username}' berhasil diperbarui.")
+            return redirect("user_manage_list")
+
         elif action == "update_role":
             user_id = request.POST.get("user_id")
             role_uuid = request.POST.get("role_uuid", "").strip()
@@ -186,6 +241,10 @@ def user_manage_list(request):
                 messages.error(request, "Anda tidak dapat menonaktifkan akun Anda sendiri.")
                 return redirect("user_manage_list")
 
+            if target_user.is_superuser and not request.user.is_superuser:
+                messages.error(request, "Akun Super Admin utama dilindungi dan tidak dapat dinonaktifkan.")
+                return redirect("user_manage_list")
+
             target_user.is_active = not target_user.is_active
             target_user.save(update_fields=["is_active"])
             status_text = "diaktifkan" if target_user.is_active else "dinonaktifkan"
@@ -198,6 +257,10 @@ def user_manage_list(request):
 
             if target_user == request.user:
                 messages.error(request, "Anda tidak dapat menghapus akun Anda sendiri.")
+                return redirect("user_manage_list")
+
+            if target_user.is_superuser:
+                messages.error(request, "Akun Super Admin utama (ROOT) dilindungi dan tidak dapat dihapus.")
                 return redirect("user_manage_list")
 
             username = target_user.username
@@ -247,6 +310,26 @@ def role_manage_list(request):
             )
             sync_menu_registry()
             messages.success(request, f"Role baru '{name}' ({code}) berhasil ditambahkan.")
+            return redirect("role_manage_list")
+
+        elif action == "update_role":
+            role_uuid = request.POST.get("role_uuid")
+            role = get_object_or_404(Role, uuid=role_uuid)
+
+            name = request.POST.get("name", "").strip()
+            description = request.POST.get("description", "").strip()
+            badge_color = request.POST.get("badge_color", "bg-slate-100 text-slate-700 border-slate-300").strip()
+
+            if not name:
+                messages.error(request, "Nama Role wajib diisi.")
+                return redirect("role_manage_list")
+
+            role.name = name
+            role.description = description
+            role.badge_color = badge_color
+            role.save(update_fields=["name", "description", "badge_color"])
+
+            messages.success(request, f"Data role '{role.name}' ({role.code}) berhasil diperbarui.")
             return redirect("role_manage_list")
 
         elif action == "delete_role":

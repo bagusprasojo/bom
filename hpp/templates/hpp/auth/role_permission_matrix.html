@@ -183,24 +183,24 @@
                 </thead>
 
                 <tbody class="divide-y divide-slate-100">
-                    {% for mod_name, menu_list in modules_dict.items %}
+                    {% for mod_item in modules_list %}
                         <!-- Module Group Header -->
                         <tr class="bg-slate-100/70 border-y border-slate-200 font-semibold"
-                            x-show="(selectedModule === 'ALL' || selectedModule === '{{ mod_name|escapejs }}')">
+                            x-show="(selectedModule === 'ALL' || selectedModule === '{{ mod_item.name|escapejs }}')">
                             <td class="py-2.5 px-4 text-slate-800 uppercase tracking-wider text-[11px] sticky left-0 bg-slate-100/95 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                 <span class="inline-flex items-center">
                                     <span class="w-2 h-2 rounded-full bg-indigo-500 mr-2"></span>
-                                    {{ mod_name }} ({{ menu_list|length }} menu)
+                                    {{ mod_item.name }} ({{ mod_item.menus|length }} menu)
                                 </span>
                             </td>
                             {% for role in roles %}
                                 <td class="py-2 px-2 text-center border-l border-slate-200">
                                     {% if role.code != "SUPERADMIN" %}
-                                        <button type="button" @click="toggleModule('{{ role.uuid }}', '{{ forloop.parentloop.counter }}', true)" title="Centang modul ini untuk role {{ role.name }}" class="px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 hover:bg-indigo-100/60 rounded">
+                                        <button type="button" @click="toggleModule('{{ role.uuid }}', '{{ mod_item.mod_idx }}', true)" title="Centang modul ini untuk role {{ role.name }}" class="px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 hover:bg-indigo-100/60 rounded">
                                             &check; Modul
                                         </button>
                                         <span class="text-slate-300 text-[10px]">|</span>
-                                        <button type="button" @click="toggleModule('{{ role.uuid }}', '{{ forloop.parentloop.counter }}', false)" title="Batal centang modul ini untuk role {{ role.name }}" class="px-1.5 py-0.5 text-[9px] font-bold text-rose-600 hover:bg-rose-100/60 rounded">
+                                        <button type="button" @click="toggleModule('{{ role.uuid }}', '{{ mod_item.mod_idx }}', false)" title="Batal centang modul ini untuk role {{ role.name }}" class="px-1.5 py-0.5 text-[9px] font-bold text-rose-600 hover:bg-rose-100/60 rounded">
                                             &times;
                                         </button>
                                     {% else %}
@@ -211,40 +211,38 @@
                         </tr>
 
                         <!-- Menu Rows -->
-                        {% for menu in menu_list %}
+                        {% for item in mod_item.menus %}
                             <tr class="hover:bg-indigo-50/30 transition border-b border-slate-100"
-                                x-show="(selectedModule === 'ALL' || selectedModule === '{{ mod_name|escapejs }}') &&
-                                        (filterQuery === '' || '{{ menu.name|lower|escapejs }}'.includes(filterQuery.toLowerCase()) || '{{ menu.code|lower|escapejs }}'.includes(filterQuery.toLowerCase()))">
+                                x-show="(selectedModule === 'ALL' || selectedModule === '{{ mod_item.name|escapejs }}') &&
+                                        (filterQuery === '' || '{{ item.menu.name|lower|escapejs }}'.includes(filterQuery.toLowerCase()) || '{{ item.menu.code|lower|escapejs }}'.includes(filterQuery.toLowerCase()))">
                                 <!-- Menu Title & Details -->
                                 <td class="py-2.5 px-4 sticky left-0 bg-white hover:bg-indigo-50/30 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                     <div class="flex items-start space-x-3">
                                         <div class="p-1 rounded bg-slate-100 text-slate-600 mt-0.5 flex-shrink-0">
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ menu.icon_svg|default:'M4 6h16M4 12h16M4 18h16' }}" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ item.menu.icon_svg|default:'M4 6h16M4 12h16M4 18h16' }}" />
                                             </svg>
                                         </div>
                                         <div class="min-w-0 flex-1">
-                                            <div class="font-bold text-slate-800 text-xs truncate">{{ menu.name }}</div>
+                                            <div class="font-bold text-slate-800 text-xs truncate">{{ item.menu.name }}</div>
                                             <div class="flex items-center space-x-2 text-[10px] text-slate-400 font-mono mt-0.5">
-                                                <span class="bg-slate-100 px-1 py-0.2 rounded border border-slate-200">{{ menu.code }}</span>
-                                                <span class="text-slate-400 truncate">{{ menu.url_name }}</span>
+                                                <span class="bg-slate-100 px-1 py-0.2 rounded border border-slate-200">{{ item.menu.code }}</span>
+                                                <span class="text-slate-400 truncate">{{ item.menu.url_name }}</span>
                                             </div>
                                         </div>
                                     </div>
                                 </td>
 
                                 <!-- Role Checkbox Cells -->
-                                {% for role in roles %}
+                                {% for rp in item.roles_perm %}
                                     <td class="py-2.5 px-3 text-center border-l border-slate-100 align-middle">
-                                        {% if role.code == "SUPERADMIN" %}
+                                        {% if rp.is_super %}
                                             <input type="checkbox" checked disabled class="rounded border-purple-300 text-purple-600 bg-purple-50 cursor-not-allowed scale-110 shadow-sm" title="Superadmin selalu memiliki akses">
                                         {% else %}
                                             <input type="checkbox"
-                                                   name="perm_{{ role.uuid }}_{{ menu.code }}"
-                                                   class="role-col-{{ role.uuid }} mod-{{ forloop.parentloop.parentloop.counter }} rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 scale-110 cursor-pointer shadow-sm"
-                                                   {% for key, allowed in perms_map.items %}
-                                                       {% if key.0 == role.uuid and key.1 == menu.code and allowed %}checked{% endif %}
-                                                   {% endfor %}>
+                                                   name="{{ rp.field_name }}"
+                                                   class="role-col-{{ rp.role.uuid }} mod-{{ mod_item.mod_idx }} rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 scale-110 cursor-pointer shadow-sm"
+                                                   {% if rp.can_view %}checked{% endif %}>
                                         {% endif %}
                                     </td>
                                 {% endfor %}

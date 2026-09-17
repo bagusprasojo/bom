@@ -295,7 +295,7 @@
                             <span>Manajemen Pengguna</span>
                         </a>
                         {% endif %}
-                        {% if is_superadmin_user %}
+                        {% if is_superadmin_user or 'MENU_ROLE_MANAGE' in allowed_menu_codes %}
                         <a href="{% url 'role_manage_list' %}" class="flex items-center gap-2 py-1.5 px-2 rounded-md hover:text-white hover:bg-slate-800/60 {% if '/settings/roles/' in request.path %}text-purple-400 font-bold bg-slate-800/40{% endif %}">
                             <span>&bull;</span>
                             <span>Master Role</span>
