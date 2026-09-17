@@ -1,0 +1,25 @@
+{
+  "name": "bom",
+  "version": "1.0.0",
+  "description": "\"# bom\"",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --minify",
+    "watch:css": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bagusprasojo/bom.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/bagusprasojo/bom/issues"
+  },
+  "homepage": "https://github.com/bagusprasojo/bom#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

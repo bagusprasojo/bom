@@ -3398,3 +3398,9 @@ def app_advantages(request):
         "comparison_table": comparison_table,
         "stakeholder_benefits": stakeholder_benefits,
     })
+
+
+def favicon_view(request):
+    """Serve lightweight SVG favicon to eliminate 404 favicon.ico errors"""
+    svg_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#4f46e5"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>'
+    return HttpResponse(svg_icon, content_type="image/svg+xml")
